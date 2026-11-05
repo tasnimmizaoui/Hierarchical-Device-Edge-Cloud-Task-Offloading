@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hierarchical-mec-offloading"
+version = "0.1.0"
+description = "Three-level hierarchical Edge/Cloud task offloading with reinforcement learning"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "UNLICENSED — INSAT course project" }
+authors = [
+  { name = "Student 1" },
+  { name = "Student 2" },
+]
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<4",
+  "matplotlib>=3.9,<4",
+  "PyYAML>=6.0,<7",
+  "simpy>=4.1.2,<5",
+]
+
+[project.optional-dependencies]
+rl = [
+  "stable-baselines3>=2.9.2,<3",
+]
+dev = [
+  "gymnasium>=1.0,<2",
+  "pytest>=8,<10",
+  "pytest-cov>=5,<8",
+  "ruff>=0.11,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.coverage.run]
+branch = true
+source = ["mec_offloading"]

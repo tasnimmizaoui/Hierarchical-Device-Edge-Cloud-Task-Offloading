@@ -1,0 +1,1 @@
+Do not commit full generated datasets by default. Store preprocessing code in `src/` or `scripts/`, record the input checksum and mapping, and keep only a tiny test fixture if its terms permit. Final experiment outputs belong under ignored `results/` or `artifacts/` paths and should be reproducible.

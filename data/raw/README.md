@@ -1,0 +1,1 @@
+Do not commit raw dataset archives. Store them locally in this folder after obtaining them under the official dataset terms. Keep the download source, checksum, selected version and date in your notes. See `docs/trace-data-notes.md` for the Alibaba Cluster Trace v2018 workflow.

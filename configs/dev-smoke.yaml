@@ -1,0 +1,30 @@
+# Synthetic development-only scenario. These are not final experiment parameters.
+# Agree and justify final scenario parameters in docs/experiment_protocol.md.
+scenario:
+  name: dev-smoke-1device-1edge-1cloud
+  purpose: development_smoke_test_only
+  seed: 7
+  devices: 1
+  edge_servers: 1
+  cloud_clusters: 1
+
+resources:
+  device_cpu_mips: 1000.0
+  edge_cpu_mips: 10000.0
+  cloud_cpu_mips: 100000.0
+
+network:
+  device_edge_bandwidth_mbps: 100.0
+  device_edge_propagation_ms: 5.0
+  edge_cloud_bandwidth_mbps: 1000.0
+  edge_cloud_propagation_ms: 25.0
+
+workload:
+  source: synthetic
+  task_count: 10
+  input_size_mb: 1.0
+  required_mi: 100.0
+  result_size_mb: 0.1
+  relative_deadline_s: 3.0
+
+# Replace these placeholder assumptions after the simulator and model are validated.

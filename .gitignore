@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Datasets: keep only documentation/small approved samples in Git
+/data/raw/**
+!/data/raw/README.md
+/data/processed/**
+!/data/processed/README.md
+
+# Training outputs and generated artifacts
+/artifacts/models/**
+!/artifacts/models/README.md
+/artifacts/figures/**
+!/artifacts/figures/README.md
+/results/
+/runs/
+/tensorboard/
+
+# Temporary files
+*.log
+*.tmp
