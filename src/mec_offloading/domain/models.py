@@ -146,6 +146,9 @@ class TaskResult:
     communication_bytes: int
     failure_reason: str | None = None
     execution_start_time_s: float = 0.0
+    feedback_messages: int = 0
+    feedback_bytes: int = 0
+    feedback_modeled_delay_s: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

@@ -79,3 +79,17 @@ class FIFOCloudPolicy:
     def choose_rule(self, queue: QueueSummary, cloud: CloudState) -> CloudSchedulingRule:
         del queue, cloud
         return CloudSchedulingRule.FIFO
+
+
+class GreedyComputeEdgePolicy:
+    """Route to cloud only if its estimated total completion delay is lower."""
+    def choose(self, task: Task, edge: EdgeState, cloud: CloudState) -> EdgeAction:
+        edge_delay = (edge.compute.queue_wait_s
+                      + task.required_mi / edge.compute.cpu_capacity_mips)
+        cloud_delay = (cloud.compute.queue_wait_s
+                       + task.required_mi / cloud.compute.cpu_capacity_mips
+                       + (task.input_size_mb + task.result_size_mb) * 8
+                         / edge.edge_cloud_link.bandwidth_mbps
+                       + 2 * edge.edge_cloud_link.propagation_delay_s)
+        return (EdgeAction.FORWARD_TO_CLOUD if cloud_delay < edge_delay
+                else EdgeAction.EXECUTE_AT_EDGE)

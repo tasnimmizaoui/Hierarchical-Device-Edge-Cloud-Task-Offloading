@@ -99,6 +99,7 @@ class SimPyBackend:
         cloud_wakeup = env.event()
         results: dict[str, TaskResult] = {}
         battery_j = self.device.battery_j
+        cloud_busy = False
 
         def link_state(
             resource: simpy.Resource, bandwidth: float, propagation: float
@@ -140,7 +141,7 @@ class SimPyBackend:
                     "cloud-1",
                     Tier.CLOUD,
                     self.config.cloud_cpu_capacity_mips,
-                    cpu_utilization=0.0,
+                    cpu_utilization=float(cloud_busy),
                     queue_wait_s=len(cloud_queue) / self.config.cloud_cpu_capacity_mips,
                     queue_length=len(cloud_queue),
                 )
@@ -171,12 +172,13 @@ class SimPyBackend:
                 yield request
                 started_at = env.now
                 queue_wait = env.now - requested_at
+                started_at = env.now
                 duration = execution_time_s(task.required_mi, capacity_mips, queue_wait)
                 yield env.timeout(duration - queue_wait)
-                return started_at, duration, queue_wait
+                return duration, queue_wait, started_at
 
         def cloud_worker() -> Any:
-            nonlocal cloud_wakeup
+            nonlocal cloud_wakeup, cloud_busy
             while True:
                 if not cloud_queue:
                     yield cloud_wakeup
@@ -207,9 +209,14 @@ class SimPyBackend:
                         return (job.queued_at_s,)
                 job = min(cloud_queue, key=key)
                 cloud_queue.remove(job)
+                dispatch_hook = getattr(cloud_policy, "record_dispatch", None)
+                if callable(dispatch_hook):
+                    dispatch_hook(job.task.task_id)
                 start = env.now
+                cloud_busy = True
                 queue_wait = start - job.queued_at_s
                 yield env.timeout(job.task.required_mi / self.config.cloud_cpu_capacity_mips)
+                cloud_busy = False
                 job.finished.succeed((start, env.now, queue_wait))
 
         env.process(cloud_worker())
@@ -226,9 +233,18 @@ class SimPyBackend:
                 self.device.rx_power_w,
                 self.device.cpu_energy_per_mi_j,
             )
-            selected_device_action = device_policy.choose(
-                task, current_device, edge_state()
-            )
+            set_clock = getattr(device_policy, "set_time", None)
+            if callable(set_clock):
+                set_clock(env.now)
+            global_decision = getattr(device_policy, "choose_global", None)
+            if callable(global_decision):
+                selected_device_action = global_decision(
+                    task, current_device, edge_state(), cloud_state()
+                )
+            else:
+                selected_device_action = device_policy.choose(
+                    task, current_device, edge_state()
+                )
             communication_delay = 0.0
             communication_bytes = 0
             energy = 0.0
@@ -236,9 +252,8 @@ class SimPyBackend:
             execution_start_time = env.now
 
             if selected_device_action == DeviceAction.EXECUTE_LOCAL:
-                execution_start_time, _, _ = yield from execute(
-                    local, task, self.device.cpu_capacity_mips
-                )
+                execution_start_time = env.now
+                _, _, execution_start_time = yield from execute(local, task, self.device.cpu_capacity_mips)
                 energy += cpu_energy_j(self.device.cpu_energy_per_mi_j, task.required_mi)
                 route = (Tier.DEVICE,)
             else:
@@ -251,11 +266,13 @@ class SimPyBackend:
                 communication_delay += upload
                 communication_bytes += int(round(task.input_size_mb * 1_000_000))
                 energy += radio_energy_j(self.device.tx_power_w, upload)
+                set_edge_clock = getattr(edge_policy, "set_time", None)
+                if callable(set_edge_clock):
+                    set_edge_clock(env.now)
                 selected_edge_action = edge_policy.choose(task, edge_state(), cloud_state())
                 if selected_edge_action == EdgeAction.EXECUTE_AT_EDGE:
-                    execution_start_time, _, _ = yield from execute(
-                        edge, task, self.config.edge_cpu_capacity_mips
-                    )
+                    execution_start_time = env.now
+                    _, _, execution_start_time = yield from execute(edge, task, self.config.edge_cpu_capacity_mips)
                     route = (Tier.DEVICE, Tier.EDGE)
                 else:
                     cloud_finished = env.event()
@@ -303,6 +320,9 @@ class SimPyBackend:
                 energy += radio_energy_j(self.device.rx_power_w, device_receive_duration)
 
             completion = env.now
+            battery_j = max(0.0, battery_j - energy)
+            feedback = getattr(device_policy, "feedback", None)
+            cost = feedback.cost(task.task_id) if feedback is not None else None
             results[task.task_id] = TaskResult(
                 task.task_id,
                 route,
@@ -314,6 +334,9 @@ class SimPyBackend:
                 communication_delay,
                 communication_bytes,
                 execution_start_time_s=execution_start_time,
+                feedback_messages=cost.messages if cost is not None else 0,
+                feedback_bytes=cost.bytes_sent if cost is not None else 0,
+                feedback_modeled_delay_s=(cost.modeled_delay_s if cost is not None else 0.0),
             )
 
         for task in sorted(tasks, key=lambda item: (item.arrival_time_s, item.task_id)):
