@@ -32,6 +32,12 @@ cloud node. The workload and runner are seed-aware, but a multi-device,
 multi-edge comparison must wait for a topology-capable backend extension;
 current results must not be described as multi-device results.
 
+The current development workload is not intended to distinguish every policy:
+the greedy device policy selects edge for all generated tasks, and the default
+cloud workload does not create enough contention for EDF and FIFO to reorder
+tasks. Use the controlled queue test and a workload/network sweep before
+interpreting those policy comparisons.
+
 Run the current baseline experiment from the repository root:
 
 ```bash

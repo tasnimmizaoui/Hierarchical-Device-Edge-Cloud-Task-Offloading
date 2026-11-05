@@ -169,10 +169,11 @@ class SimPyBackend:
             requested_at = env.now
             with resource.request() as request:
                 yield request
+                started_at = env.now
                 queue_wait = env.now - requested_at
                 duration = execution_time_s(task.required_mi, capacity_mips, queue_wait)
                 yield env.timeout(duration - queue_wait)
-                return duration, queue_wait
+                return started_at, duration, queue_wait
 
         def cloud_worker() -> Any:
             nonlocal cloud_wakeup
@@ -235,8 +236,9 @@ class SimPyBackend:
             execution_start_time = env.now
 
             if selected_device_action == DeviceAction.EXECUTE_LOCAL:
-                execution_start_time = env.now
-                _, _ = yield from execute(local, task, self.device.cpu_capacity_mips)
+                execution_start_time, _, _ = yield from execute(
+                    local, task, self.device.cpu_capacity_mips
+                )
                 energy += cpu_energy_j(self.device.cpu_energy_per_mi_j, task.required_mi)
                 route = (Tier.DEVICE,)
             else:
@@ -251,8 +253,9 @@ class SimPyBackend:
                 energy += radio_energy_j(self.device.tx_power_w, upload)
                 selected_edge_action = edge_policy.choose(task, edge_state(), cloud_state())
                 if selected_edge_action == EdgeAction.EXECUTE_AT_EDGE:
-                    execution_start_time = env.now
-                    yield from execute(edge, task, self.config.edge_cpu_capacity_mips)
+                    execution_start_time, _, _ = yield from execute(
+                        edge, task, self.config.edge_cpu_capacity_mips
+                    )
                     route = (Tier.DEVICE, Tier.EDGE)
                 else:
                     cloud_finished = env.event()

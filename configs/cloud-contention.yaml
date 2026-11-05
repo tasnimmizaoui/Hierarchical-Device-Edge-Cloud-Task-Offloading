@@ -1,0 +1,36 @@
+scenario:
+  name: cloud-contention
+  purpose: distinguish_edf_and_fifo
+  seed: 23
+
+resources:
+  device_cpu_mips: 1000.0
+  edge_cpu_mips: 5000.0
+  cloud_cpu_mips: 100.0
+
+network:
+  device_edge_bandwidth_mbps: 1000.0
+  device_edge_propagation_ms: 1.0
+  edge_cloud_bandwidth_mbps: 1000.0
+  edge_cloud_propagation_ms: 1.0
+
+workload:
+  tasks:
+    - task_id: long-first
+      arrival_time_s: 0.0
+      input_size_mb: 0.1
+      required_mi: 1000.0
+      result_size_mb: 0.1
+      deadline_s: 100.0
+    - task_id: fifo-second
+      arrival_time_s: 0.05
+      input_size_mb: 0.1
+      required_mi: 100.0
+      result_size_mb: 0.1
+      deadline_s: 100.0
+    - task_id: urgent-third
+      arrival_time_s: 0.06
+      input_size_mb: 0.1
+      required_mi: 100.0
+      result_size_mb: 0.1
+      deadline_s: 0.2

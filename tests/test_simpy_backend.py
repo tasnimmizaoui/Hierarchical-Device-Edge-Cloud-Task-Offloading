@@ -3,11 +3,13 @@ from mec_offloading.baselines import (
     EDFCloudPolicy,
     EdgeExecutePolicy,
     EdgeForwardPolicy,
+    FIFOCloudPolicy,
+    GreedyNearestDevicePolicy,
     LocalOnlyPolicy,
 )
 from mec_offloading.domain.actions import DeviceAction
 from mec_offloading.domain.models import DeviceState, EdgeState, Task
-from mec_offloading.simulation import SimPyBackend
+from mec_offloading.simulation import SimPyBackend, SimulationConfig
 from mec_offloading.workloads import generate_synthetic_tasks
 
 
@@ -58,3 +60,69 @@ def test_external_device_policy_is_called_with_local_observation_only():
 
     assert result.route[-1].value == "device"
     assert observed == [("external-1", 1.0, 0)]
+
+
+def test_execution_start_time_is_after_queue_wait_at_each_tier():
+    tasks = [
+        Task("first", "device-1", 0.0, 0.01, 1_000.0, 0.01, 100.0),
+        Task("second", "device-1", 0.01, 0.01, 1_000.0, 0.01, 100.0),
+    ]
+
+    local = SimPyBackend().run_episode(
+        tasks, LocalOnlyPolicy(), EdgeExecutePolicy(), EDFCloudPolicy(), seed=1
+    )
+    assert local[0].execution_start_time_s == 0.0
+    assert local[1].execution_start_time_s >= 0.99
+
+    edge = SimPyBackend().run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeExecutePolicy(), EDFCloudPolicy(), seed=1
+    )
+    assert edge[0].execution_start_time_s > tasks[0].arrival_time_s
+    assert edge[1].execution_start_time_s > edge[0].execution_start_time_s
+
+    cloud = SimPyBackend().run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeForwardPolicy(), EDFCloudPolicy(), seed=1
+    )
+    assert cloud[0].execution_start_time_s > tasks[0].arrival_time_s
+    assert cloud[1].execution_start_time_s > cloud[0].execution_start_time_s
+
+
+def test_greedy_switches_between_local_and_edge_based_on_costs():
+    tasks = [
+        Task("large-upload", "device-1", 0.0, 20.0, 1_000.0, 0.1, 30.0),
+        Task("small-upload", "device-1", 0.1, 0.1, 1_000.0, 0.1, 30.0),
+    ]
+    backend = SimPyBackend()
+    results = backend.run_episode(
+        tasks,
+        GreedyNearestDevicePolicy(),
+        EdgeExecutePolicy(),
+        EDFCloudPolicy(),
+        seed=17,
+    )
+
+    assert [result.route[-1].value for result in results] == ["device", "edge"]
+
+
+def test_cloud_contention_changes_edf_and_fifo_order_and_deadlines():
+    tasks = [
+        Task("long-first", "device-1", 0.0, 0.1, 1_000.0, 0.1, 100.0),
+        Task("fifo-second", "device-1", 0.05, 0.1, 100.0, 0.1, 100.0),
+        Task("urgent-third", "device-1", 0.06, 0.1, 100.0, 0.1, 0.2),
+    ]
+    config = SimulationConfig(cloud_cpu_capacity_mips=100.0)
+    backend = SimPyBackend(config=config)
+
+    fifo = backend.run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeForwardPolicy(), FIFOCloudPolicy(), seed=23
+    )
+    edf = backend.run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeForwardPolicy(), EDFCloudPolicy(), seed=23
+    )
+
+    fifo_order = [r.task_id for r in sorted(fifo, key=lambda r: r.execution_start_time_s)]
+    edf_order = [r.task_id for r in sorted(edf, key=lambda r: r.execution_start_time_s)]
+    assert fifo_order == ["long-first", "fifo-second", "urgent-third"]
+    assert edf_order == ["long-first", "urgent-third", "fifo-second"]
+    assert fifo[2].deadline_met is False
+    assert edf[2].deadline_met is False
