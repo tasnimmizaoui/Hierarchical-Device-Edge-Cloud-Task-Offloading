@@ -1,15 +1,15 @@
 # ADR-0001: Simulation engine selection
 
-- **Status:** Proposed — must be replaced by an accepted decision after the feasibility spike.
+- **Status:** Accepted
 - **Driver:** Student 1
 - **Approvers:** Student 1 and Student 2
-- **Decision date:** TBD
+- **Decision date:** 2026-11-05
 
 ## Context
 
 The model needs dynamic arrivals, compute and communication queues, hierarchical device/edge decisions, cloud scheduling, result-return traffic, device energy accounting and repeatable experiments. Python is preferred so the simulator, Gymnasium environments and Stable-Baselines3 can share one language.
 
-## Candidate A — PureEdgeSim Python companion (first to evaluate)
+## Candidate A — PureEdgeSim Python companion (rejected)
 
 The upstream PureEdgeSim repository now points to a Python companion and describes it as the same simulator with matching configuration/output conventions. PureEdgeSim is MEC-focused and documents extensible task orchestration, network, topology, energy, and simulation components.
 
@@ -19,6 +19,32 @@ The upstream PureEdgeSim repository now points to a Python companion and describ
 
 Repository: https://github.com/CharafeddineMechalikh/PureEdgeSim_Python  
 Upstream project: https://github.com/CharafeddineMechalikh/PureEdgeSim
+
+### Source verification
+
+The feasibility spike inspected PureEdgeSim Python commit
+`0cd9874d17b75e6e0a13b6d16e5034dad50e3e07` (version 6.1.0), including
+`src/pureedgesim/manager.py`, `orchestrator.py`, `nodes.py`, `network.py`,
+`tasks.py`, and the extension-point tests/examples.
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| Devices, edge and cloud nodes | `topology.py`, `nodes.py` (`EdgeDevice`, `EdgeDataCenter`, `CloudDataCenter`) | Supported |
+| Dynamic task generation/execution | `tasks.py`, `manager.py`, event engine | Supported |
+| Network latency and bandwidth | `network.py` (`NetworkLink`, `InfrastructureGraph`) | Supported |
+| Compute queues and execution time | `nodes.py` (`submit_task`, `start_execution`) | Supported |
+| Device energy/battery | `nodes.py` (`EnergyModelComputingNode`) | Supported |
+| Independent device decision | `manager.py` calls one `orchestrator.orchestrate` hook | Not supported |
+| Independent edge decision | Same global orchestrator hook | Not supported |
+| Independent cloud scheduling | Placement algorithm is global; no cloud queue-policy hook | Not supported |
+| Local observations per agent | Orchestrator receives manager/scenario and can inspect all nodes | Not guaranteed |
+| Non-invasive external policies | `Simulation.set_custom_orchestrator` exists, but only for one global policy | Partial |
+
+PureEdgeSim therefore satisfies the physical simulation concerns but not the
+hierarchical decision contract. Adding the missing boundaries would require
+changing its manager event flow and queue implementation, which is more
+invasive than implementing the small required model behind our existing
+framework-independent protocols.
 
 ## Candidate B — SimPy discrete-event model
 
@@ -46,15 +72,20 @@ Choose PureEdgeSim Python only if the hooks for both lower levels are genuinely 
 
 Do not build two full simulators. If PureEdgeSim fails the spike, keep the shared domain models/ports and implement one SimPy backend behind `SimulationBackend`.
 
-## Decision record (complete after the spike)
+## Decision record
 
-- Selected engine and exact version/commit:
-- Python version:
-- Example run command and result:
-- Device policy hook found and verified:
-- Edge policy hook found and verified:
-- Cloud scheduler hook found and verified:
-- Network/queue/compute/energy metrics available:
-- Missing features and adaptations:
-- Decision and rationale:
-- Approved by both students on:
+- **Selected engine:** SimPy 4.x, used as an event-driven kernel behind
+  `mec_offloading.domain.ports.SimulationBackend`.
+- **Python version:** Python 3.11 is the project target; the current validation
+  interpreter is Python 3.10, which is compatible with the backend code.
+- **PureEdgeSim example run:** source tests and extension-point examples were
+  inspected at the pinned commit; no installation into this project was needed.
+- **Device, edge and cloud policy hooks:** implemented as three separate
+  protocol arguments in the selected backend.
+- **Network/queue/compute/energy metrics:** implemented explicitly in the
+  project backend with documented first-order assumptions.
+- **Integration effort:** small, auditable backend; no upstream fork and no
+  RL-framework dependency.
+- **Reason for rejecting PureEdgeSim:** its supported extension point is a
+  single global orchestrator, which cannot demonstrate independent
+  device-level and edge-level decisions with restricted observations.

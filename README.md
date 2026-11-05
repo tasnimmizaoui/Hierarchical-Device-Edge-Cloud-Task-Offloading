@@ -131,6 +131,19 @@ hierarchical-mec-offloading/
 └── pyproject.toml
 ```
 
+## Run the Student 1 simulation smoke test
+
+Install the declared dependencies with `pip install -e ".[dev]"`, then run:
+
+```bash
+python scripts/run_simulation_smoke.py
+```
+
+The script uses a seeded synthetic workload and prints measured local,
+device-to-edge and device-to-edge-to-cloud results. It is a smoke test, not an
+experimental claim; compare policies only with the reproducible experiment
+runner and matching workloads.
+
 ## Quality gates
 
 Before merging a pull request:
