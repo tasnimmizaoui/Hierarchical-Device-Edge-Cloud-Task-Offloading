@@ -1,4 +1,9 @@
-# System architecture — initial proposal
+# System architecture
+
+The simulator represents one task moving through three decision levels. The
+current reference topology contains one device, one edge server, and one cloud
+node. The policy interfaces are already separated so the topology can be
+extended without changing the RL contract.
 
 ```mermaid
 flowchart TD
@@ -19,6 +24,38 @@ flowchart TD
     M -. cloud reward .-> CA
 ```
 
+## One-task lifecycle
+
+```text
+arrival
+  |
+  v
+[device policy]
+  | local ----------------------> [device queue] ----\
+  |                                                   |
+  | offload                                          v
+  +---------------------------> [device-edge link] -> [edge policy]
+                                                      | edge
+                                                      v
+                                               [edge queue/CPU]
+                                                      |
+                                                      | cloud
+                                                      v
+                                           [edge-cloud link] -> [cloud queue]
+                                                                    |
+                                                                    v
+                                                               [cloud CPU]
+                                                                    |
+                 result transfer <---------------------------------+
+                                  |
+                                  v
+                  [latency, energy, deadline, traffic metrics]
+```
+
+Every queue contributes waiting time. Every modeled link contributes
+serialization time, propagation time, and resource queue time. The result
+returns to the device before the task is marked complete.
+
 ## Decision boundaries
 
 - Device chooses only local execution or a nearby edge. It does not directly choose cloud.
@@ -27,9 +64,10 @@ flowchart TD
 - Each agent sees only its permitted local observation plus deliberately defined feedback fields. Do not pass global state to lower agents in the hierarchical variant.
 - Model device-edge and edge-cloud links separately, including uplink and result-return/downlink traffic if available.
 - A deadline is a duration from arrival, not an absolute timestamp in the input.
-- Begin with independent tasks. DAG tasks are optional unless required by the professor.
+- The current workload contains independent tasks. DAG tasks are not yet
+  implemented.
 
-## Cloud action-space proposal
+## Cloud action space
 
 For a fixed discrete DQN action space, the cloud agent chooses a queue discipline at a dispatch point:
 

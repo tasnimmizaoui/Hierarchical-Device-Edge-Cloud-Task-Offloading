@@ -1,6 +1,8 @@
-# Shared interfaces — Interface v1 proposal
+# Shared interfaces — Interface v1
 
-This is the contract between Student 1 (simulation) and Student 2 (RL). Both approve it before either side builds against it. A change to field names, units, action meanings or method signatures requires a reviewed pull request from both students.
+This is the frozen contract between Student 1 (simulation) and Student 2 (RL).
+Both sides build against it. A change to field names, units, action meanings or
+method signatures requires a reviewed pull request from both students.
 
 ## Canonical units
 
@@ -56,7 +58,7 @@ The formulas are primitive model components, not a complete energy model. State 
 
 The cloud RL agent initially selects one scheduling rule per dispatch decision. It is an RL-controlled scheduler, not an agent selecting arbitrary task IDs. Keep baseline EDF as a distinct fixed policy. Any change to direct task-index selection requires a jointly revised action/observation contract.
 
-## Minimum observations — v1 proposal
+## Minimum observations — v1
 
 Device: normalized task demand, input size, remaining deadline, battery fraction, local CPU capacity, device-edge bandwidth.
 
@@ -76,6 +78,25 @@ All normalization scales must be configuration values used identically in traini
 - `SimulationBackend.run_episode(...)`
 
 The simulator/domain layers must not import Gymnasium or Stable-Baselines3. RL adapters implement these protocols at the boundary.
+
+### Example policy injection
+
+The simulator accepts ordinary Python objects; they do not need to inherit
+from a simulator class:
+
+```python
+results = backend.run_episode(
+    tasks,
+    device_policy=student_2_device_policy,
+    edge_policy=student_2_edge_policy,
+    cloud_policy=student_2_cloud_policy,
+    seed=7,
+)
+```
+
+An RL adapter converts its model output into one of the shared `IntEnum`
+actions. The backend remains responsible for timing, queues, execution,
+communication, and metrics.
 
 ## Result contract
 

@@ -1,6 +1,16 @@
 # Student 1 — simulation backend
 
-Implement the chosen engine behind `mec_offloading.domain.ports.SimulationBackend`. First complete the PureEdgeSim Python feasibility spike in `docs/decisions/0001-simulator-selection.md`. If using SimPy, keep the backend small and event-driven; do not add undocumented physical realism. Required behavior: hierarchical decisions, compute/network queueing, result return, task outcomes and metric logging.
+The selected backend is SimPy. It implements the
+`mec_offloading.domain.ports.SimulationBackend` protocol and keeps the model
+small enough to validate in an oral defense.
+
+Required behavior:
+
+- independent device, edge, and cloud policy decisions;
+- compute and network queueing;
+- result-return traffic;
+- task outcomes and deadline checks;
+- latency, energy, and communication metrics.
 # SimPy simulation backend
 
 `SimPyBackend` is the Student 1 reference backend. It uses SimPy only as the

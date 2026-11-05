@@ -27,38 +27,36 @@ Complete the mandatory three-agent system, baselines and reproducible experiment
 
 Ownership is primary responsibility, not exclusive knowledge. Both students must be able to explain and reproduce the complete system.
 
-## Technology choices — provisional until the simulator spike
+## Technology choices
 
 - **Python 3.11** for a consistent development environment.
-- **PureEdgeSim Python companion:** first candidate because it is MEC-oriented and has built-in infrastructure, networking, energy, task orchestration and metrics. It is only selected if the feasibility spike verifies the policy hooks required by this project.
-- **SimPy:** fallback if PureEdgeSim cannot expose the device and edge decision points cleanly. SimPy is a discrete-event simulation library, not a complete MEC simulator; the team must implement and validate its own network, resource and energy models.
+- **SimPy 4.x:** the selected discrete-event kernel. We implement the small
+  MEC model ourselves so device, edge, and cloud decisions remain separate.
+  The decision and source-code evidence are in
+  [`docs/decisions/0001-simulator-selection.md`](docs/decisions/0001-simulator-selection.md).
 - **Gymnasium** for the RL environment contract.
 - **Stable-Baselines3** for DQN/PPO experiments.
 - **NumPy, Pandas, Matplotlib, PyYAML** for computation, data and analysis.
 - **pytest + Ruff + GitHub Actions** for tests, linting and reproducibility checks.
 
-Read `docs/decisions/0001-simulator-selection.md` before committing to either engine. Do not build two complete simulators.
+Do not add a second simulator. Student 2's RL code must use the policy
+interfaces in `src/mec_offloading/domain/ports.py`.
 
-## Create the GitHub repository
+## Team workflow
 
-1. On GitHub, create a repository named `hierarchical-mec-offloading` (Private is a sensible default for an active class project; make it public later if your course permits).
-2. Create it **empty**: do not pre-add a README, `.gitignore`, or license because this project folder already contains them.
-3. Extract this starter archive. Open a terminal in the extracted `hierarchical-mec-offloading` folder.
-4. Initialize and push the local project:
+The repository is already initialized. Each student should:
 
-```bash
-git init -b main
-git add .
-git commit -m "chore: initialize hierarchical MEC project"
-git remote add origin https://github.com/<GITHUB-OWNER>/hierarchical-mec-offloading.git
-git push -u origin main
-```
+1. Pull the latest `main` branch.
+2. Create a short-lived branch for one task, for example
+   `student-2/device-policy-adapter`.
+3. Run the tests before editing.
+4. Make a focused change and add or update tests.
+5. Run `pytest -q` and `ruff check .`.
+6. Open a pull request and request review from the other student.
 
-Replace `<GITHUB-OWNER>` with the account or organization that owns the repository.
-
-5. Invite Student 2 as a repository collaborator: **Settings → Collaborators**. Both students should use their own GitHub accounts.
-6. Keep `main` stable. Work in short-lived branches and merge through pull requests. Enable GitHub Actions and review the CI result before merging.
-7. Create GitHub Issues from `docs/task-board.md`. Apply labels such as `student-1`, `student-2`, `shared`, `simulation`, `rl`, `baseline`, `experiment`, `report`, `P0`, and `P1`.
+Keep `main` stable. Do not change the shared task fields, units, action
+meanings, or policy method signatures without reviewing
+[`docs/interfaces.md`](docs/interfaces.md) together.
 
 ## Local setup
 
@@ -100,13 +98,32 @@ pip install -e ".[dev,rl]"
 
 Start with CPU training. A GPU is not required for the small DQN smoke test.
 
-## First parallel tasks
+## Start here
 
-Both students can start immediately after agreeing to `docs/interfaces.md`:
+After installation, run the complete verification sequence:
 
-- **Student 1:** complete the PureEdgeSim Python feasibility spike; inspect the Alibaba trace schema; implement and test the metric formulas; create a minimal simulator spike.
-- **Student 2:** run the mock Gymnasium environment; validate it with Gymnasium/SB3; train a tiny DQN; keep the environment marked as a mock until Student 1's simulation adapter is ready.
-- **Together:** freeze units, task fields, action semantics and the policy interfaces. Do not change these independently.
+```bash
+python scripts/check_environment.py
+pytest -q
+python scripts/run_simulation_smoke.py
+python scripts/run_baselines.py --seeds 1 2 3
+ruff check .
+```
+
+Read the documentation in this order:
+
+1. [`docs/architecture.md`](docs/architecture.md) — task lifecycle and
+   decision boundaries.
+2. [`docs/interfaces.md`](docs/interfaces.md) — shared data, units, actions,
+   observations, and Python protocols.
+3. [`docs/experiment_protocol.md`](docs/experiment_protocol.md) — baselines,
+   seeds, metrics, and current limitations.
+4. [`docs/task-board.md`](docs/task-board.md) — remaining work by owner.
+
+Student 1 owns the simulator and evaluation. Student 2 can begin with the
+mock Gymnasium environment, then implement RL adapters that satisfy the
+protocols in `src/mec_offloading/domain/ports.py`. The simulator/domain layers
+must not import Gymnasium or Stable-Baselines3.
 
 The exact acceptance criteria and task owners are in `docs/task-board.md` and `docs/first-week-plan.md`.
 
@@ -130,6 +147,9 @@ hierarchical-mec-offloading/
 ├── artifacts/               # Local model/figure outputs; large files ignored
 └── pyproject.toml
 ```
+
+Generated experiment outputs are written under `results/`, which is ignored by
+Git. Do not treat development smoke-test results as final scientific findings.
 
 ## Run the Student 1 simulation smoke test
 

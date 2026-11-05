@@ -1,6 +1,16 @@
-# First-week execution plan — two students
+# Development plan — two students
 
-Use sessions rather than fixed dates. Enter actual dates in GitHub Issues after confirming the course deadline and other coursework.
+This plan describes the remaining development sequence. The simulator decision
+and minimal baseline backend are complete; do not repeat the rejected
+PureEdgeSim investigation.
+
+## Completed foundation
+
+- [x] SimPy selected and documented.
+- [x] Local, edge, and cloud execution paths implemented.
+- [x] Shared policy protocols and task result contract implemented.
+- [x] Random, greedy, edge, cloud-EDF, and cloud-FIFO baselines implemented.
+- [x] Three-seed CSV experiment runner and reproducibility tests implemented.
 
 ## Session 0 — one joint setup session
 
@@ -15,9 +25,10 @@ Use sessions rather than fixed dates. Enter actual dates in GitHub Issues after 
 
 ## Student 1 — Simulation & Evaluation
 
-### S1-01: simulator feasibility spike (P0)
+### S1-01: simulator feasibility spike (completed)
 
-Time-box this to one focused work session. Start with the PureEdgeSim Python companion linked in the simulator decision record.
+The PureEdgeSim comparison is complete and recorded in the simulator decision
+record. The selected implementation is the local SimPy backend.
 
 1. Clone it separately; do not copy its source into this repository.
 2. Run one unmodified example with its documented setup.
@@ -27,7 +38,9 @@ Time-box this to one focused work session. Start with the PureEdgeSim Python com
 6. Export one run and inspect its output columns.
 7. Record version/commit, commands, results, limitations and the decision in `docs/decisions/0001-simulator-selection.md`.
 
-**Pass condition:** a small custom policy can be called at the required hierarchy levels without invasive changes, and required metrics are accessible or cleanly extensible. If not, select SimPy and explicitly implement the missing models.
+**Result:** PureEdgeSim was rejected because its supported extension point is a
+single global orchestrator. SimPy was selected to preserve independent
+hierarchical decisions.
 
 ### S1-02: workload schema and mapping (P0)
 
@@ -75,10 +88,10 @@ Time-box this to one focused work session. Start with the PureEdgeSim Python com
 
 At the end of the first week:
 
-- [ ] Decide PureEdgeSim Python vs SimPy using the written evidence.
-- [ ] Freeze Interface v1 (changes thereafter require a PR reviewed by both).
-- [ ] Demonstrate a mock device action plus one end-to-end fixed-policy task route.
-- [ ] Agree the first experimental scenario and seed strategy.
+- [x] Decide PureEdgeSim Python vs SimPy using the written evidence.
+- [x] Freeze Interface v1 (changes thereafter require a PR reviewed by both).
+- [x] Demonstrate fixed-policy task routes and multi-seed baselines.
+- [x] Agree the first experimental scenario and seed strategy.
 - [ ] Reassign work if one student's blocked time or task load is materially higher.
 
 ## Do not do yet
