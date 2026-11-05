@@ -86,15 +86,20 @@ def main() -> None:
             seed=data["scenario"]["seed"],
         )
         ordered = sorted(results, key=lambda result: result.execution_start_time_s)
-        print(label, [
-            (
+        print(label)
+        for result in ordered:
+            task = next(task for task in tasks if task.task_id == result.task_id)
+            print(
                 result.task_id,
-                round(result.execution_start_time_s, 6),
-                round(result.end_to_end_latency_s, 6),
-                result.deadline_met,
+                (
+                    f"arrival={result.arrival_time_s:.6f}s",
+                    f"start={result.execution_start_time_s:.6f}s",
+                    f"completion={result.completion_time_s:.6f}s",
+                    f"absolute_deadline={task.absolute_deadline_s:.6f}s",
+                    f"latency={result.end_to_end_latency_s:.6f}s",
+                    f"deadline_met={result.deadline_met}",
+                ),
             )
-            for result in ordered
-        ])
 
 
 if __name__ == "__main__":

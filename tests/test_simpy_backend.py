@@ -1,3 +1,5 @@
+import pytest
+
 from mec_offloading.baselines import (
     AlwaysEdgePolicy,
     EDFCloudPolicy,
@@ -126,3 +128,24 @@ def test_cloud_contention_changes_edf_and_fifo_order_and_deadlines():
     assert edf_order == ["long-first", "urgent-third", "fifo-second"]
     assert fifo[2].deadline_met is False
     assert edf[2].deadline_met is False
+
+
+def test_cloud_contention_latency_and_deadline_use_arrival_relative_completion():
+    tasks = [
+        Task("long-first", "device-1", 0.0, 0.1, 1_000.0, 0.1, 100.0),
+        Task("fifo-second", "device-1", 0.05, 0.1, 100.0, 0.1, 100.0),
+        Task("urgent-third", "device-1", 0.06, 0.1, 100.0, 0.1, 0.2),
+    ]
+    results = SimPyBackend(
+        config=SimulationConfig(cloud_cpu_capacity_mips=100.0)
+    ).run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeForwardPolicy(), FIFOCloudPolicy(), seed=23
+    )
+
+    for result, task in zip(results, tasks, strict=True):
+        assert result.end_to_end_latency_s == pytest.approx(
+            result.completion_time_s - result.arrival_time_s
+        )
+        assert result.deadline_met is (
+            result.completion_time_s <= task.arrival_time_s + task.deadline_s
+        )

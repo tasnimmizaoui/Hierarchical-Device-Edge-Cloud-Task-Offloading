@@ -126,11 +126,25 @@ orders and outcomes were:
 | EDF | `long-first`, `urgent-third`, `fifo-second` | deadline missed |
 
 This is a valid distinction between scheduling policies, but it does not show
-that EDF is better for every metric. In this scenario, the urgent task's
-end-to-end latency was 11.9472 s under FIFO and 10.9472 s under EDF, while the
-other queued task was 10.9572 s under FIFO and 11.9572 s under EDF. The
-deadline was 0.2 s relative to the urgent task's 0.06 s arrival, so both
-policies missed it after the deliberately long first task.
+that EDF is better for every metric. The validation output reports simulation
+timestamps and arrival-relative latency separately. The actual measurements
+were:
+
+| Policy | Task | Arrival | Execution start | Completion | Absolute deadline | Latency | Deadline |
+|---|---|---:|---:|---:|---:|---:|---|
+| FIFO | `long-first` | 0.0000 s | 0.0036 s | 10.0072 s | 100.0000 s | 10.0072 s | met |
+| FIFO | `fifo-second` | 0.0500 s | 10.0036 s | 11.0072 s | 100.0500 s | 10.9572 s | met |
+| FIFO | `urgent-third` | 0.0600 s | 11.0036 s | 12.0072 s | 0.2600 s | 11.9472 s | missed |
+| EDF | `long-first` | 0.0000 s | 0.0036 s | 10.0072 s | 100.0000 s | 10.0072 s | met |
+| EDF | `urgent-third` | 0.0600 s | 10.0036 s | 11.0072 s | 0.2600 s | 10.9472 s | missed |
+| EDF | `fifo-second` | 0.0500 s | 11.0036 s | 12.0072 s | 100.0500 s | 11.9572 s | met |
+
+Thus `11.9472 s` and `10.9472 s` are actual end-to-end latencies:
+`completion_time_s - arrival_time_s`, not absolute completion timestamps. The
+urgent task's relative deadline is `0.2 s` from its `0.06 s` arrival, giving an
+absolute deadline of `0.26 s`; both policies miss it after the deliberately
+long first task. Deadline success uses the same arrival-relative boundary:
+`completion_time_s <= arrival_time_s + deadline_s`.
 
 The reproducible greedy configuration is
 `configs/greedy-switch.yaml`. It measured:
