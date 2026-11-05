@@ -56,6 +56,30 @@ Every queue contributes waiting time. Every modeled link contributes
 serialization time, propagation time, and resource queue time. The result
 returns to the device before the task is marked complete.
 
+`execution_start_time_s` is the timestamp at which the selected compute
+resource is acquired and computation begins. For a queued task it is later
+than arrival time; the difference is compute-resource waiting time. This field
+is used to verify FIFO and EDF dispatch order and is distinct from
+end-to-end completion time.
+
+## Validation scenarios
+
+The default development smoke workload is intentionally small and regular. It
+does not reliably make greedy placement switch decisions or create different
+EDF/FIFO orders. Two separate configurations test those behaviors:
+
+- `configs/greedy-switch.yaml`: a large, slow upload favors local execution,
+  while a small upload favors edge execution.
+- `configs/cloud-contention.yaml`: a long first cloud task blocks later tasks,
+  and different deadlines force EDF and FIFO to choose different queued jobs.
+
+Run them with:
+
+```bash
+python scripts/run_scenario_validation.py configs/greedy-switch.yaml
+python scripts/run_scenario_validation.py configs/cloud-contention.yaml
+```
+
 ## Decision boundaries
 
 - Device chooses only local execution or a nearby edge. It does not directly choose cloud.

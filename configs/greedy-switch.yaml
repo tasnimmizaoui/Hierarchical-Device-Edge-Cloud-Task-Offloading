@@ -1,0 +1,41 @@
+scenario:
+  name: greedy-switch
+  purpose: validate_local_and_edge_greedy_decisions
+  seed: 17
+
+resources:
+  device_cpu_mips: 1000.0
+  edge_cpu_mips: 5000.0
+  cloud_cpu_mips: 20000.0
+
+network:
+  device_edge_bandwidth_mbps: 10.0
+  device_edge_propagation_ms: 10.0
+  edge_cloud_bandwidth_mbps: 1000.0
+  edge_cloud_propagation_ms: 40.0
+
+conditions:
+  - name: slow-link
+    device_edge_bandwidth_mbps: 10.0
+    edge_cpu_mips: 5000.0
+  - name: fast-link
+    device_edge_bandwidth_mbps: 1000.0
+    edge_cpu_mips: 5000.0
+  - name: slow-edge
+    device_edge_bandwidth_mbps: 100.0
+    edge_cpu_mips: 100.0
+
+workload:
+  tasks:
+    - task_id: local-candidate
+      arrival_time_s: 0.0
+      input_size_mb: 20.0
+      required_mi: 1000.0
+      result_size_mb: 0.1
+      deadline_s: 30.0
+    - task_id: edge-candidate
+      arrival_time_s: 0.1
+      input_size_mb: 0.1
+      required_mi: 1000.0
+      result_size_mb: 0.1
+      deadline_s: 30.0

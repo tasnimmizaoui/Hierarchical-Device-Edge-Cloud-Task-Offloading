@@ -11,7 +11,8 @@ Required behavior:
 - result-return traffic;
 - task outcomes and deadline checks;
 - latency, energy, and communication metrics.
-# SimPy simulation backend
+
+## SimPy simulation backend
 
 `SimPyBackend` is the Student 1 reference backend. It uses SimPy only as the
 discrete-event kernel; the MEC model and policy interfaces remain owned by this

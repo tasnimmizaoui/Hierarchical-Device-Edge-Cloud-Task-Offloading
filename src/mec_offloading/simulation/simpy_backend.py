@@ -170,6 +170,7 @@ class SimPyBackend:
             requested_at = env.now
             with resource.request() as request:
                 yield request
+                started_at = env.now
                 queue_wait = env.now - requested_at
                 started_at = env.now
                 duration = execution_time_s(task.required_mi, capacity_mips, queue_wait)
