@@ -40,6 +40,9 @@ METRIC_KEYS = (
     "throughput_tasks_per_s",
     "mean_communication_delay_s",
     "communication_bytes",
+    "feedback_messages",
+    "feedback_bytes",
+    "mean_feedback_modeled_delay_s",
 )
 
 
@@ -85,6 +88,11 @@ def aggregate_results(
             mean(result.communication_delay_s for result in results) if results else 0.0
         ),
         "communication_bytes": sum(result.communication_bytes for result in results),
+        "feedback_messages": sum(result.feedback_messages for result in results),
+        "feedback_bytes": sum(result.feedback_bytes for result in results),
+        "mean_feedback_modeled_delay_s": (
+            mean(result.feedback_modeled_delay_s for result in results) if results else 0.0
+        ),
     }
     return row
 
@@ -155,6 +163,9 @@ def run_baselines(
                     "device_energy_j": result.device_energy_j,
                     "communication_delay_s": result.communication_delay_s,
                     "communication_bytes": result.communication_bytes,
+                    "feedback_messages": result.feedback_messages,
+                    "feedback_bytes": result.feedback_bytes,
+                    "feedback_modeled_delay_s": result.feedback_modeled_delay_s,
                     "failure_reason": result.failure_reason or "",
                 }
                 for result in results

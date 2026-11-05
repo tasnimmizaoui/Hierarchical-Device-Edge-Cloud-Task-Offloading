@@ -13,6 +13,32 @@ Implement and evaluate a three-level task-offloading architecture:
 
 The mandatory evaluation compares Random, Greedy/Nearest, EDF, Centralized RL and Hierarchical RL using end-to-end latency, device energy, deadline satisfaction and coordination overhead.
 
+
+## 🧠 Intégration RL V2 — Étudiante 2
+
+Cette version fusionne le code Double-DQN de `RL.zip` dans le dépôt principal :
+le **moteur SimPy unique** exécute désormais les tâches pour les agents
+Device/Edge/Cloud, l'agent centralisé et les heuristiques. Un visualiseur web
+lit les résultats CSV communs. La V2 ajoute des récompenses terminales par
+tâche, un feedback causal différé, des checkpoints choisis sur validation, des
+ablation de fréquence et le suivi de l'apprentissage. Voir le
+[guide technique et limites de la V2](docs/ETUDIANTE_2_V2_FR.md) et
+[le guide initial de fusion](docs/INTEGRATION_RL.md).
+
+```bash
+pip install -e ".[dev,rl,web]"
+python scripts/train_integrated_rl.py --episodes 18 --tasks 100
+python scripts/compare_integrated_policies.py --seeds 10001 10002 10003 --tasks 100
+streamlit run web_app.py
+```
+
+**État : prototype V2 intégré à valider**, avec tâches synthétiques, topo 1/1/1 et
+feedback différé non bloquant. Les transitions RL sont actuellement des décisions
+terminales par tâche (formulation contextuelle), pas un environnement Gymnasium
+multi-étapes. La source Alibaba/Google, la topologie multi-edge et les
+expériences finales restent à implémenter. Réentraîner les modèles : les anciens
+checkpoints du simulateur de démonstration RL.zip sont incompatibles.
+
 ## Scope rule
 
 Complete the mandatory three-agent system, baselines and reproducible experiments before attempting federated learning. The bonus extension is not part of the initial critical path.

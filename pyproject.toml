@@ -23,7 +23,12 @@ dependencies = [
 
 [project.optional-dependencies]
 rl = [
+  "torch>=2.3,<3",
+  "gymnasium>=1.0,<2",
   "stable-baselines3>=2.9.2,<3",
+]
+web = [
+  "streamlit>=1.40,<3",
 ]
 dev = [
   "gymnasium>=1.0,<2",
