@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class Tier(str, Enum):
+class Tier(str, Enum):  # noqa: UP042
     DEVICE = "device"
     EDGE = "edge"
     CLOUD = "cloud"
@@ -145,6 +145,7 @@ class TaskResult:
     communication_delay_s: float
     communication_bytes: int
     failure_reason: str | None = None
+    execution_start_time_s: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

@@ -144,6 +144,26 @@ device-to-edge and device-to-edge-to-cloud results. It is a smoke test, not an
 experimental claim; compare policies only with the reproducible experiment
 runner and matching workloads.
 
+## Run reproducible baseline experiments
+
+Run one workload for each seed and compare every baseline on the matching
+workload:
+
+```bash
+python scripts/run_baselines.py --seeds 1 2 3
+```
+
+Inspect:
+
+```bash
+column -s, -t < results/dev-smoke/aggregate_metrics.csv
+column -s, -t < results/dev-smoke/aggregate_statistics.csv
+```
+
+The protocol, baseline definitions, scenario assumptions, metric denominators
+and current topology limitation are documented in
+[`docs/experiment_protocol.md`](docs/experiment_protocol.md).
+
 ## Quality gates
 
 Before merging a pull request:

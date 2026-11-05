@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.metadata
 import sys
 
-
 PACKAGES = ("numpy", "pandas", "matplotlib", "PyYAML", "simpy", "gymnasium", "stable-baselines3")
 print(f"Python: {sys.version.split()[0]}")
 for package in PACKAGES:

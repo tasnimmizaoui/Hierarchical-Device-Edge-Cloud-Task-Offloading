@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -57,7 +57,7 @@ def main() -> None:
             "normalized_device_edge_bandwidth",
         ],
         "actions": {"0": "EXECUTE_LOCAL", "1": "OFFLOAD_TO_EDGE"},
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "note": "Toy environment only; these are not project results.",
     }
     args.output.with_suffix(".metadata.json").write_text(

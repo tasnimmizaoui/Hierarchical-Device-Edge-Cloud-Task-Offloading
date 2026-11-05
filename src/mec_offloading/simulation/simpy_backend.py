@@ -232,8 +232,10 @@ class SimPyBackend:
             communication_bytes = 0
             energy = 0.0
             device_receive_duration = 0.0
+            execution_start_time = env.now
 
             if selected_device_action == DeviceAction.EXECUTE_LOCAL:
+                execution_start_time = env.now
                 _, _ = yield from execute(local, task, self.device.cpu_capacity_mips)
                 energy += cpu_energy_j(self.device.cpu_energy_per_mi_j, task.required_mi)
                 route = (Tier.DEVICE,)
@@ -249,6 +251,7 @@ class SimPyBackend:
                 energy += radio_energy_j(self.device.tx_power_w, upload)
                 selected_edge_action = edge_policy.choose(task, edge_state(), cloud_state())
                 if selected_edge_action == EdgeAction.EXECUTE_AT_EDGE:
+                    execution_start_time = env.now
                     yield from execute(edge, task, self.config.edge_cpu_capacity_mips)
                     route = (Tier.DEVICE, Tier.EDGE)
                 else:
@@ -264,7 +267,7 @@ class SimPyBackend:
                     cloud_queue.append(_CloudJob(task, env.now, cloud_finished))
                     if not cloud_wakeup.triggered:
                         cloud_wakeup.succeed()
-                    _, _, _ = yield cloud_finished
+                    execution_start_time, _, _ = yield cloud_finished
                     route = (Tier.DEVICE, Tier.EDGE, Tier.CLOUD)
                 download, _ = yield from transfer(
                     (
@@ -307,6 +310,7 @@ class SimPyBackend:
                 energy,
                 communication_delay,
                 communication_bytes,
+                execution_start_time_s=execution_start_time,
             )
 
         for task in sorted(tasks, key=lambda item: (item.arrival_time_s, item.task_id)):
