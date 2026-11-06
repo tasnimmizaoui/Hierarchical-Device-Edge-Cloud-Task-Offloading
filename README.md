@@ -35,8 +35,9 @@ streamlit run web_app.py
 **État : prototype V2 intégré à valider**, avec tâches synthétiques, topo 1/1/1 et
 feedback différé non bloquant. Les transitions RL sont actuellement des décisions
 terminales par tâche (formulation contextuelle), pas un environnement Gymnasium
-multi-étapes. La source Alibaba/Google, la topologie multi-edge et les
-expériences finales restent à implémenter. Réentraîner les modèles : les anciens
+multi-étapes. Un adaptateur Alibaba est disponible pour un petit échantillon
+local, mais la topologie multi-edge et les expériences finales restent à
+implémenter. Réentraîner les modèles : les anciens
 checkpoints du simulateur de démonstration RL.zip sont incompatibles.
 
 ## Scope rule
@@ -145,6 +146,23 @@ Read the documentation in this order:
 3. [`docs/experiment_protocol.md`](docs/experiment_protocol.md) — baselines,
    seeds, metrics, and current limitations.
 4. [`docs/task-board.md`](docs/task-board.md) — remaining work by owner.
+
+## Trace workload status
+
+The repository does not contain Alibaba raw data or a processed trace sample.
+The additive loader is ready for a locally obtained, small
+`batch_instance.csv` subset:
+
+```bash
+python scripts/prepare_trace_sample.py data/raw/batch_instance.csv
+python scripts/run_trace_workload.py data/raw/batch_instance.csv --max-tasks 20
+```
+
+See [`docs/trace-data-notes.md`](docs/trace-data-notes.md) for the verified
+schema mapping, synthetic MEC assumptions, rejection counts, and chronological
+train/validation/test splitting. Student 2 can continue current synthetic RL
+training now; trace-backed RL training still requires joint agreement on the
+workload-source CLI and split configuration.
 
 Student 1 owns the simulator and evaluation. Student 2 can begin with the
 mock Gymnasium environment, then implement RL adapters that satisfy the

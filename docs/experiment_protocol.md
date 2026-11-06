@@ -157,6 +157,20 @@ The reproducible greedy configuration is
 The decisions come from the cost estimates: the large upload makes local
 execution cheaper for the first task, while the small upload makes edge
 execution cheaper for the second. No task identifier is used by the policy.
+
+## Trace-backed workloads
+
+The synthetic generator remains the default smoke-test source. The additive
+Alibaba adapter consumes a locally obtained, small `batch_instance.csv`
+subset; no raw dataset is committed. Alibaba's trace is a datacenter batch
+workload, not a mobile MEC trace. Its records are adapted into the device-edge-
+cloud model, so payload sizes, deadlines, device assignment, battery, and
+network conditions remain synthetic assumptions.
+
+The adapter documents every mapping in `docs/trace-data-notes.md`, rejects
+invalid/unfinished/DAG-dependent records with counts, and creates disjoint
+chronological train/validation/test windows. Trace-backed results must not be
+reported as measured mobile-device behavior.
 The same file also evaluates explicit conditions:
 
 - `slow-link`: 10 Mbps device-edge link, 5,000 MIPS edge;
