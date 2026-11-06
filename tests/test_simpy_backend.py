@@ -230,3 +230,11 @@ def test_topology_requires_real_device_associations():
             (EdgeConfig("edge-1", 1_000.0),),
             (),
         )
+
+
+def test_task_with_missing_device_is_rejected():
+    task = Task("unknown-device", "device-unknown", 0.0, 0.1, 100.0, 0.1, 10.0)
+    with pytest.raises(ValueError, match="unknown device"):
+        SimPyBackend().run_episode(
+            [task], AlwaysEdgePolicy(), EdgeExecutePolicy(), EDFCloudPolicy(), seed=1
+        )

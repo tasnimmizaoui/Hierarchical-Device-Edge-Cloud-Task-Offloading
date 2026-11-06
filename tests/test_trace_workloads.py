@@ -1,7 +1,11 @@
 import pytest
 
+from mec_offloading.baselines import AlwaysEdgePolicy, EDFCloudPolicy, EdgeForwardPolicy
+from mec_offloading.domain.models import DeviceState
+from mec_offloading.simulation import EdgeConfig, SimPyBackend, SimulationConfig, TopologyConfig
 from mec_offloading.trace_workloads import (
     TraceWorkloadConfig,
+    assign_tasks_to_devices,
     load_alibaba_2017_batch_tasks,
     load_alibaba_batch_instances,
     load_workload,
@@ -145,3 +149,67 @@ def test_alibaba_2017_rejects_multi_task_jobs_to_avoid_unknown_dags(tmp_path):
     result = load_alibaba_2017_batch_tasks(task_path, instance_path=instance_path)
     assert result.selected_count == 0
     assert result.rejected_count == 2
+
+
+def test_assign_tasks_to_devices_is_round_robin_and_reproducible(tmp_path):
+    path = write_fixture(
+        tmp_path,
+        "".join(
+            f"i-{i},random,job-{i},T,success,{i},{i + 1},m,1,1,50,50,1,1\n"
+            for i in range(4)
+        ),
+    )
+    tasks = load_alibaba_batch_instances(path).tasks
+    assigned = assign_tasks_to_devices(tasks, ("device-1", "device-2", "device-3"))
+    repeated = assign_tasks_to_devices(tasks, ("device-1", "device-2", "device-3"))
+    assert [task.device_id for task in assigned] == [
+        "device-1", "device-2", "device-3", "device-1"
+    ]
+    assert assigned == repeated
+    with pytest.raises(ValueError):
+        assign_tasks_to_devices(tasks, ())
+
+
+def test_trace_tasks_run_on_configured_multi_device_topology(tmp_path):
+    task_path = tmp_path / "batch_task.csv"
+    task_path.write_text(
+        "10,20,job-1,task-1,1,Terminated,1,1\n"
+        "11,21,job-2,task-1,1,Terminated,1,1\n"
+        "12,22,job-3,task-1,1,Terminated,1,1\n",
+        encoding="utf-8",
+    )
+    instance_path = tmp_path / "batch_instance.csv"
+    instance_path.write_text(
+        "10,11,job-1,task-1,1,Terminated,1,1,1,1,1,1\n"
+        "11,12,job-2,task-1,1,Terminated,1,1,1,1,1,1\n"
+        "12,13,job-3,task-1,1,Terminated,1,1,1,1,1,1\n",
+        encoding="utf-8",
+    )
+    loaded = load_alibaba_2017_batch_tasks(
+        task_path,
+        instance_path=instance_path,
+        config=TraceWorkloadConfig(device_ids=("device-1", "device-2", "device-3")),
+    )
+    topology = TopologyConfig(
+        (
+            DeviceState("device-1", 1_000.0, 10.0, 10.0, 1.0, 1.0, 0.001),
+            DeviceState("device-2", 1_000.0, 10.0, 10.0, 1.0, 1.0, 0.001),
+            DeviceState("device-3", 1_000.0, 10.0, 10.0, 1.0, 1.0, 0.001),
+        ),
+        (EdgeConfig("edge-1", 1_000.0), EdgeConfig("edge-2", 1_000.0)),
+        (("device-1", "edge-1"), ("device-2", "edge-1"), ("device-3", "edge-2")),
+    )
+    results = SimPyBackend(
+        config=SimulationConfig(topology=topology)
+    ).run_episode(
+        list(loaded.tasks),
+        AlwaysEdgePolicy(),
+        EdgeForwardPolicy(),
+        EDFCloudPolicy(),
+        seed=7,
+    )
+    assert {result.source_device_id for result in results} == {
+        "device-1", "device-2", "device-3"
+    }
+    assert {result.source_edge_id for result in results} == {"edge-1", "edge-2"}
+    assert all(result.route[-1].value == "cloud" for result in results)

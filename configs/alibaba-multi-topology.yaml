@@ -1,0 +1,43 @@
+topology:
+  devices:
+    - id: device-1
+      cpu_mips: 1000.0
+      battery_j: 100.0
+      battery_capacity_j: 100.0
+      tx_power_w: 1.5
+      rx_power_w: 0.5
+      cpu_energy_per_mi_j: 0.001
+    - id: device-2
+      cpu_mips: 800.0
+      battery_j: 80.0
+      battery_capacity_j: 80.0
+      tx_power_w: 1.2
+      rx_power_w: 0.4
+      cpu_energy_per_mi_j: 0.001
+    - id: device-3
+      cpu_mips: 1200.0
+      battery_j: 120.0
+      battery_capacity_j: 120.0
+      tx_power_w: 1.8
+      rx_power_w: 0.6
+      cpu_energy_per_mi_j: 0.001
+  edges:
+    - id: edge-1
+      cpu_mips: 500.0
+      device_edge_bandwidth_mbps: 100.0
+      edge_cloud_bandwidth_mbps: 1000.0
+      device_edge_propagation_s: 0.010
+      edge_cloud_propagation_s: 0.040
+    - id: edge-2
+      cpu_mips: 750.0
+      device_edge_bandwidth_mbps: 100.0
+      edge_cloud_bandwidth_mbps: 1000.0
+      device_edge_propagation_s: 0.010
+      edge_cloud_propagation_s: 0.040
+  device_to_edge:
+    device-1: edge-1
+    device-2: edge-1
+    device-3: edge-2
+
+resources:
+  cloud_cpu_mips: 500.0

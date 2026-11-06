@@ -96,3 +96,31 @@ splits are available with `split_trace_tasks()` and do not overlap. The
 complete MEC device dataset. Device assignment, battery, payload sizes,
 deadlines, wireless conditions, and edge/cloud capacities are synthetic MEC
 assumptions and must be reported as such.
+
+## Multi-device topology integration
+
+Run the accepted 2017 tasks through the configured three-device topology:
+
+```bash
+python scripts/run_trace_workload.py \
+  data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv \
+  --source alibaba2017 --max-tasks 20 \
+  --topology-config configs/alibaba-multi-topology.yaml
+```
+
+Accepted tasks are assigned deterministically in selection order:
+
+```text
+task 0 -> device-1 -> edge-1
+task 1 -> device-2 -> edge-1
+task 2 -> device-3 -> edge-2
+task 3 -> device-1 -> edge-1
+...
+```
+
+This placement is synthetic; it is not present in Alibaba's records. Arrival
+timestamps and derived MI are trace-derived. Payload sizes, deadlines, device
+state, wireless links, Edge capacities, and Cloud capacity are simulation
+assumptions. The runner exports per-task results and aggregate metrics. Raw
+CSV files remain local and ignored by Git.

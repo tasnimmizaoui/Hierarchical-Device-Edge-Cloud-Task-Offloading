@@ -25,9 +25,9 @@ experiment seed (`seed + 101`, `seed + 202`, and `seed + 303`).
 
 | Parameter | Value/distribution | Unit | Source/rationale |
 |---|---|---|---|
-| Number of devices | 1 | devices | Current backend scope |
-| Number of edge servers | 1 | servers | Current backend scope |
-| Cloud/HPC capacity | 20,000 | MIPS | `SimulationConfig` default |
+| Number of devices | 3 | devices | `configs/alibaba-multi-topology.yaml` demonstration topology |
+| Number of edge servers | 2 | servers | `configs/alibaba-multi-topology.yaml` demonstration topology |
+| Cloud/HPC capacity | 20,000 | MIPS | `SimulationConfig` default for synthetic baseline; 500 MIPS in trace demonstration |
 | Device CPU | 1,000 | MIPS | Synthetic assumption |
 | Edge CPU | 5,000 | MIPS | Synthetic assumption |
 | Device-edge bandwidth/delay | 100 / 10 | Mbps / ms | Synthetic assumption |
@@ -39,10 +39,11 @@ experiment seed (`seed + 101`, `seed + 202`, and `seed + 303`).
 | Relative deadline | Uniform(1, 4) | seconds | Synthetic assumption |
 | Random seeds | User supplied, e.g. 1, 2, 3 | integers | Reproducibility |
 
-The current backend does not support shared multi-device or multi-edge
-resources. Therefore no multi-device result is reported in this phase. Adding
-that topology is a separate backend extension, not an assumption hidden inside
-the current CSVs.
+The standard development baseline remains a one-device/one-edge smoke
+configuration for comparability. The backend also supports the explicit
+three-device/two-edge topology used by the trace integration demonstration;
+its results are reported separately and are not mixed with the original
+single-topology baseline.
 
 ## Baseline semantics
 
@@ -216,6 +217,30 @@ the relevant SimPy compute resource is acquired. Therefore it includes queue
 waiting for local, edge, and cloud execution. It is separate from task arrival
 and completion time, and it does not change latency, energy, routes, or
 communication totals.
+
+## Multi-device Alibaba demonstration
+
+The reproducible command is:
+
+```bash
+python scripts/run_trace_workload.py \
+  data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv \
+  --source alibaba2017 --max-tasks 20 \
+  --topology-config configs/alibaba-multi-topology.yaml
+```
+
+The selected trace tasks are assigned round-robin to three configured device
+resources. Devices 1 and 2 share Edge 1; Device 3 uses Edge 2. All tasks in
+this demonstration are forwarded to the one shared Cloud scheduler. The
+result files contain source IDs, route, arrival, start, completion, latency,
+energy and deadline fields, plus aggregate metrics.
+
+This is an integration demonstration, not a mobile-MEC benchmark. Alibaba
+provides datacenter timestamps and compute evidence; device assignment,
+payloads, deadlines, batteries, network parameters and MEC capacities are
+synthetic assumptions. RL training scripts are not changed by this runner and
+can continue using the same `Task` objects with synthetic workloads.
 
 ## Per-run metadata
 

@@ -12,7 +12,7 @@ import math
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from mec_offloading.domain.models import Task
@@ -96,6 +96,18 @@ class TraceLoadResult:
     @property
     def auxiliary_rejection_reasons(self) -> dict[str, int]:
         return dict(Counter(rejection.reason for rejection in self.auxiliary_rejected))
+
+
+def assign_tasks_to_devices(
+    tasks: Iterable[Task], device_ids: tuple[str, ...]
+) -> list[Task]:
+    """Assign tasks round-robin to configured device IDs."""
+    if not device_ids or any(not device_id for device_id in device_ids):
+        raise ValueError("device_ids must contain at least one non-empty ID")
+    return [
+        replace(task, device_id=device_ids[index % len(device_ids)])
+        for index, task in enumerate(tasks)
+    ]
 
 
 def _required_float(row: Mapping[str, str], field: str) -> float:

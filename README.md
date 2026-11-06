@@ -166,6 +166,26 @@ train/validation/test splitting. Student 2 can continue current synthetic RL
 training now; trace-backed RL training still requires joint agreement on the
 workload-source CLI and split configuration.
 
+## Run a trace workload on the multi-device topology
+
+After obtaining the local Alibaba 2017 files, run:
+
+```bash
+python scripts/run_trace_workload.py \
+  data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv \
+  --source alibaba2017 \
+  --max-tasks 20 \
+  --topology-config configs/alibaba-multi-topology.yaml
+```
+
+The loader assigns accepted tasks round-robin to `device-1`, `device-2`, and
+`device-3`. The topology then maps devices 1 and 2 to `edge-1` and device 3
+to `edge-2`; these IDs select actual SimPy resources. The command writes
+`task_results.csv` and `aggregate_metrics.csv` under
+`results/trace-multi-topology/`. Use `--source synthetic` without an input
+file to run the same topology with the preserved synthetic generator.
+
 Student 1 owns the simulator and evaluation. Student 2 can begin with the
 mock Gymnasium environment, then implement RL adapters that satisfy the
 protocols in `src/mec_offloading/domain/ports.py`. The simulator/domain layers
