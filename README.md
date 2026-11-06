@@ -210,6 +210,22 @@ device-to-edge and device-to-edge-to-cloud results. It is a smoke test, not an
 experimental claim; compare policies only with the reproducible experiment
 runner and matching workloads.
 
+## Demonstrate the multi-device, multi-edge topology
+
+Run the deterministic manual demonstration:
+
+```bash
+python scripts/run_multi_topology_demo.py
+```
+
+It uses three devices, two independently queued Edge servers, and one shared
+Cloud scheduler. Devices 1 and 2 share Edge 1, while Device 3 uses Edge 2.
+The output is generated from actual SimPy results and includes task source
+identifiers, routes, completion times, latency, device energy, deadlines, and
+the Cloud execution order across both Edge origins. This is an architecture
+demonstration, not a performance benchmark: the workload and policy choices
+are deliberately small and deterministic.
+
 ## Run reproducible baseline experiments
 
 Run one workload for each seed and compare every baseline on the matching
