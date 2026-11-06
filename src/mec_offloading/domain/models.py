@@ -149,6 +149,8 @@ class TaskResult:
     feedback_messages: int = 0
     feedback_bytes: int = 0
     feedback_modeled_delay_s: float = 0.0
+    source_device_id: str = ""
+    source_edge_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

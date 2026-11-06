@@ -1,9 +1,10 @@
 # System architecture
 
 The simulator represents one task moving through three decision levels. The
-current reference topology contains one device, one edge server, and one cloud
-node. The policy interfaces are already separated so the topology can be
-extended without changing the RL contract.
+default topology remains one device, one edge server, and one cloud node for
+backward compatibility. `TopologyConfig` can instead define multiple devices,
+multiple edges, and a fixed device-to-edge association while all edges share
+one cloud scheduler.
 
 ```mermaid
 flowchart TD
@@ -79,6 +80,21 @@ Run them with:
 python scripts/run_scenario_validation.py configs/greedy-switch.yaml
 python scripts/run_scenario_validation.py configs/cloud-contention.yaml
 ```
+
+## Configurable topology
+
+```text
+device-1 ─┐
+device-2 ─┼──> edge-1 ─┐
+device-3 ─┘           ├──> shared cloud scheduler
+                      └──> edge-2
+```
+
+Each device owns a CPU resource and battery ledger. Each edge owns a CPU
+resource, queue, and device/cloud links. Devices may share an edge queue.
+Cloud jobs carry the originating edge ID, so one scheduler can compare jobs
+from both edges. The association is configured explicitly; the device policy
+can only choose local execution or its assigned edge.
 
 ## Decision boundaries
 

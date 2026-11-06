@@ -1,5 +1,10 @@
 """Simulation backends."""
 
-from mec_offloading.simulation.simpy_backend import SimPyBackend, SimulationConfig
+from mec_offloading.simulation.simpy_backend import (
+    EdgeConfig,
+    SimPyBackend,
+    SimulationConfig,
+    TopologyConfig,
+)
 
-__all__ = ["SimPyBackend", "SimulationConfig"]
+__all__ = ["EdgeConfig", "SimPyBackend", "SimulationConfig", "TopologyConfig"]

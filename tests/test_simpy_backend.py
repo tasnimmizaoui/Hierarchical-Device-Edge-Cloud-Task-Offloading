@@ -11,7 +11,12 @@ from mec_offloading.baselines import (
 )
 from mec_offloading.domain.actions import DeviceAction
 from mec_offloading.domain.models import DeviceState, EdgeState, Task
-from mec_offloading.simulation import SimPyBackend, SimulationConfig
+from mec_offloading.simulation import (
+    EdgeConfig,
+    SimPyBackend,
+    SimulationConfig,
+    TopologyConfig,
+)
 from mec_offloading.workloads import generate_synthetic_tasks
 
 
@@ -148,4 +153,80 @@ def test_cloud_contention_latency_and_deadline_use_arrival_relative_completion()
         )
         assert result.deadline_met is (
             result.completion_time_s <= task.arrival_time_s + task.deadline_s
+        )
+
+
+def _three_device_topology() -> TopologyConfig:
+    devices = tuple(
+        DeviceState(
+            f"device-{index}",
+            1_000.0,
+            10.0 + index,
+            10.0 + index,
+            1.5,
+            0.5,
+            0.001,
+        )
+        for index in range(1, 4)
+    )
+    edges = (
+        EdgeConfig("edge-1", 1_000.0),
+        EdgeConfig("edge-2", 2_000.0),
+    )
+    return TopologyConfig(
+        devices,
+        edges,
+        (("device-1", "edge-1"), ("device-2", "edge-1"), ("device-3", "edge-2")),
+    )
+
+
+def test_multi_device_multi_edge_topology_preserves_resources_and_origins():
+    tasks = [
+        Task("d1-cloud", "device-1", 0.0, 0.1, 1_000.0, 0.1, 100.0),
+        Task("d2-cloud", "device-2", 0.0, 0.1, 1_000.0, 0.1, 100.0),
+        Task("d3-cloud", "device-3", 0.0, 0.1, 1_000.0, 0.1, 100.0),
+    ]
+    backend = SimPyBackend(
+        config=SimulationConfig(
+            cloud_cpu_capacity_mips=100.0,
+            topology=_three_device_topology(),
+        )
+    )
+    results = backend.run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeForwardPolicy(), EDFCloudPolicy(), seed=4
+    )
+
+    assert {(result.source_device_id, result.source_edge_id) for result in results} == {
+        ("device-1", "edge-1"),
+        ("device-2", "edge-1"),
+        ("device-3", "edge-2"),
+    }
+    assert all(result.route[-1].value == "cloud" for result in results)
+    assert all(result.device_energy_j > 0 for result in results)
+    assert results[0].communication_bytes > 0
+
+
+def test_tasks_on_same_edge_share_edge_queue_but_different_edges_do_not():
+    tasks = [
+        Task("shared-1", "device-1", 0.0, 0.01, 2_000.0, 0.01, 100.0),
+        Task("shared-2", "device-2", 0.0, 0.01, 2_000.0, 0.01, 100.0),
+        Task("separate", "device-3", 0.0, 0.01, 2_000.0, 0.01, 100.0),
+    ]
+    results = SimPyBackend(
+        config=SimulationConfig(topology=_three_device_topology())
+    ).run_episode(
+        tasks, AlwaysEdgePolicy(), EdgeExecutePolicy(), EDFCloudPolicy(), seed=9
+    )
+    by_id = {result.task_id: result for result in results}
+
+    assert by_id["shared-2"].execution_start_time_s > by_id["shared-1"].execution_start_time_s
+    assert by_id["separate"].execution_start_time_s < by_id["shared-2"].execution_start_time_s
+
+
+def test_topology_requires_real_device_associations():
+    with pytest.raises(ValueError):
+        TopologyConfig(
+            (DeviceState("device-1", 1_000.0, 1.0, 1.0, 1.0, 1.0, 0.001),),
+            (EdgeConfig("edge-1", 1_000.0),),
+            (),
         )
