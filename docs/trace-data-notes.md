@@ -1,43 +1,58 @@
-# Workload trace: Alibaba Cluster Trace v2018
+# Workload trace: Alibaba Cluster Trace 2017
 
-Official documentation: https://github.com/alibaba/clusterdata/blob/master/cluster-trace-v2018/trace_2018.md
+Official documentation:
+[Alibaba 2017](https://github.com/alibaba/clusterdata/blob/master/cluster-trace-v2017/trace_201708.md)
+and [Alibaba 2018](https://github.com/alibaba/clusterdata/blob/master/cluster-trace-v2018/trace_2018.md)
 
-## Dataset size and tables
+## Recommendation: Alibaba Cluster Trace 2017
 
-The official v2018 documentation describes about 4,000 machines over eight days and six tables: `machine_meta`, `machine_usage`, `container_meta`, `container_usage`, `batch_instance`, and `batch_task`. The published combined archive is very large (documented around 98 GB in the separate-file listing), so do not download/extract everything for the first experiment.
+Use the 2017 release for the project workload. Its official `batch_task.csv`
+contains `create_timestamp`, which is a genuine task creation/release time,
+and `plan_cpu`, which is a per-instance CPU request. Its matching
+`batch_instance.csv` contains actual instance start/end timestamps and
+`real_cpu_avg`, allowing a derived computation estimate without calling an
+execution start an arrival.
 
-## Verified schema mapping and data workflow
+The 2017 release covers a 24-hour production-cluster period and is much more
+practical for the Monday deadline than 2018. It is also headerless and requires
+joining two files, which the adapter now handles.
 
-1. Read `trace_2018.md` and the linked schema first.
-2. Decide whether the project's workload should represent independent batch tasks. The task `task_name` can encode DAG dependencies; the initial project scope can choose independent tasks, but document filtering/exclusion.
-3. Use `batch_instance.csv` for the first adapter. Its verified fields are
-   `instance_name`, `task_name`, `job_name`, `status`, `start_time`,
-   `end_time`, and `cpu_avg`. Alibaba documents all time fields in seconds
-   from the trace period origin and `cpu_avg` as average CPU usage where 100
-   represents one core.
-4. Download only the smallest required subset/table(s) using the official instructions, and record archive checksums.
-5. Preprocess in chunks; retain a deterministic sampling seed and a compact selected window.
-6. Map raw trace fields to `Task` fields in `docs/interfaces.md`; preserve source column names and mapping units.
-7. Explicitly synthesize missing MEC-specific properties such as device battery, radio bandwidth/propagation, task deadline and edge association, unless another measured source is introduced.
+## Dataset comparison
 
-The adapter uses the observed instance `start_time` as an arrival proxy because
-the verified `batch_instance` schema has no task-creation timestamp. It derives
-compute demand as:
+| Candidate | Arrival evidence | Compute evidence | DAG/retry implications | Practical size/effort |
+|---|---|---|---|---|
+| 2017 | `batch_task.create_timestamp` | `batch_task.plan_cpu` plus successful `batch_instance` duration and `real_cpu_avg` | Task dependencies are not exposed as a direct field; the loader accepts only single-task jobs. Instance rows represent retries via `seq_no`; failed/incomplete attempts are excluded and completed attempts are aggregated. | Official archive `trace_201708.tgz`; about 1.3k machines and a 24-hour period. Two headerless CSVs must be joined. |
+| 2018 | `batch_instance.start_time` only | `cpu_avg` and instance duration | `task_name` encodes DAG dependencies; `batch_instance` has no creation time. | Official documentation lists a 48 GB archive, 280 GB extracted, or a 98 GB separate-file listing. Not realistic to process fully before Monday. |
 
-`(end_time - start_time) × (cpu_avg / 100) × reference_mips_per_core`
+2018 execution `start_time` is not original task arrival. It is when an
+instance began running after scheduling. Using it as arrival would erase
+queueing and release-time behavior. The current legacy 2018 adapter retains
+this as an explicitly named arrival proxy only.
 
-The reference MIPS-per-core value is configurable and is not an Alibaba
-measurement. Records with missing/invalid required fields, unaccepted status,
-duplicate IDs, or DAG dependency suffixes are rejected and counted. The
-default accepted statuses are `completed`, `finished`, `success`, `succeeded`,
-and `terminated`; override them for a differently documented sample.
+## Verified 2017 schema and mapping
+
+The 2017 files are headerless. `batch_task.csv` fields are
+`create_timestamp`, `modify_timestamp`, `job_id`, `task_id`, `instance_num`,
+`status`, `plan_cpu`, and `plan_mem`. `batch_instance.csv` fields include
+`start_timestamp`, `end_timestamp`, `job_id`, `task_id`, `machineID`, `status`,
+`seq_no`, `total_seq_no`, and `real_cpu_avg`. Official timestamps are seconds
+relative to the trace start. The adapter accepts completed/terminated records,
+rejects invalid or incomplete records, and reports rejection counts.
+
+Derived compute demand is:
+
+`sum((instance_end - instance_start) × real_cpu_avg × reference_mips_per_core)`
+
+over valid terminated instances for the task. `real_cpu_avg` is documented as
+an actual CPU number, not a fraction. The MIPS-per-core conversion is a
+configurable simulation estimate, not an Alibaba measurement.
 
 ## Provenance table
 
 | Target field | Trace source column | Direct or derived? | Mapping / unit | Missing-data policy |
 |---|---|---|---|---|
-| `arrival_time_s` | `batch_instance.start_time` | Derived | subtract minimum trace start, seconds | reject missing/invalid |
-| `required_mi` | `end_time`, `start_time`, `cpu_avg` | Derived estimate | elapsed seconds × average core fraction × configurable MIPS/core, MI | reject invalid |
+| `arrival_time_s` | 2017 `batch_task.create_timestamp` | Derived | subtract trace origin, seconds | reject missing/invalid |
+| `required_mi` | 2017 `batch_instance.start_timestamp`, `end_timestamp`, `real_cpu_avg` | Derived estimate | sum runtime × actual CPU × configurable MIPS/core, MI | reject invalid/incomplete instances |
 | `input_size_mb` | None | Synthetic | configured decimal MB | configuration default |
 | `result_size_mb` | None | Synthetic | configured decimal MB | configuration default |
 | `deadline_s` | None | Synthetic | configured relative seconds | configuration default |
@@ -46,16 +61,38 @@ and `terminated`; override them for a differently documented sample.
 
 ## Commands
 
-Raw data is not included in Git. Obtain the official dataset under its terms,
-extract only a small `batch_instance.csv` sample into `data/raw/`, then run:
+Raw data is not included in Git. Obtain the official 2017 archive under its
+terms from the link in `README2017.md`:
+
+```text
+http://aliopentrace.oss-cn-beijing.aliyuncs.com/v2017Traces/alibaba-trace-2017.tar.gz
+```
+
+Verify it with the repository's official `SHA256SUM`, extract only the needed
+files, and place a manageable filtered sample in `data/raw/`:
 
 ```bash
-python scripts/prepare_trace_sample.py data/raw/batch_instance.csv
-python scripts/run_trace_workload.py data/raw/batch_instance.csv --max-tasks 20
+python scripts/prepare_trace_sample.py data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv
+python scripts/run_trace_workload.py data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv --max-tasks 20
 ```
+
+The audit command reports `selected`, `task_rejected`, and
+`instance_records_rejected` separately. With `--max-tasks 20`, it stops after
+20 usable tasks and reports `stopped_early=True`; rejection counts then cover
+records examined before that limit, not the entire source file. Without a
+limit, the current real sample produced 381 selected tasks, 80,172 rejected
+task rows, and 46,536 rejected/incomplete auxiliary instance records. The
+largest task rejection category was 77,487 multi-task jobs; these are excluded
+because the independent-task simulator does not reconstruct their DAGs.
 
 For unit tests, use `pytest -q tests/test_trace_workloads.py`. The adapter
 returns the same `Task` objects as `generate_synthetic_tasks()`. Chronological
-splits are available with `split_trace_tasks()` and do not overlap.
+splits are available with `split_trace_tasks()` and do not overlap. The
+`--format 2018-instance` option remains only for the legacy 2018 adapter.
 
-**Important:** Alibaba Cluster Trace is an infrastructure workload trace, not a complete MEC device dataset. Do not claim it directly provides battery, wireless conditions or per-task deadlines unless you verify those fields in a relevant schema.
+**Important:** Alibaba Cluster Trace is an infrastructure workload trace, not a
+complete MEC device dataset. Device assignment, battery, payload sizes,
+deadlines, wireless conditions, and edge/cloud capacities are synthetic MEC
+assumptions and must be reported as such.

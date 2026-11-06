@@ -150,12 +150,14 @@ Read the documentation in this order:
 ## Trace workload status
 
 The repository does not contain Alibaba raw data or a processed trace sample.
-The additive loader is ready for a locally obtained, small
-`batch_instance.csv` subset:
+The additive loader is ready for a locally obtained, small 2017
+`batch_task.csv`/`batch_instance.csv` subset:
 
 ```bash
-python scripts/prepare_trace_sample.py data/raw/batch_instance.csv
-python scripts/run_trace_workload.py data/raw/batch_instance.csv --max-tasks 20
+python scripts/prepare_trace_sample.py data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv
+python scripts/run_trace_workload.py data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv --max-tasks 20
 ```
 
 See [`docs/trace-data-notes.md`](docs/trace-data-notes.md) for the verified

@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import math
 import re
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,16 @@ from mec_offloading.domain.models import Task
 _DEPENDENCY_SUFFIX = re.compile(r"(?:^|_)M?\d+(?:_\d+)*$")
 _DEFAULT_COMPLETED_STATUSES = frozenset(
     {"completed", "finished", "success", "succeeded", "terminated"}
+)
+_ALIBABA_2017_BATCH_TASK_FIELDS = (
+    "create_timestamp",
+    "modify_timestamp",
+    "job_id",
+    "task_id",
+    "instance_num",
+    "status",
+    "plan_cpu",
+    "plan_mem",
 )
 
 
@@ -63,6 +74,8 @@ class TraceLoadResult:
     tasks: tuple[Task, ...]
     rejected: tuple[TraceReject, ...]
     source: str
+    auxiliary_rejected: tuple[TraceReject, ...] = ()
+    stopped_early: bool = False
 
     @property
     def selected_count(self) -> int:
@@ -71,6 +84,18 @@ class TraceLoadResult:
     @property
     def rejected_count(self) -> int:
         return len(self.rejected)
+
+    @property
+    def auxiliary_rejected_count(self) -> int:
+        return len(self.auxiliary_rejected)
+
+    @property
+    def rejection_reasons(self) -> dict[str, int]:
+        return dict(Counter(rejection.reason for rejection in self.rejected))
+
+    @property
+    def auxiliary_rejection_reasons(self) -> dict[str, int]:
+        return dict(Counter(rejection.reason for rejection in self.auxiliary_rejected))
 
 
 def _required_float(row: Mapping[str, str], field: str) -> float:
@@ -161,11 +186,12 @@ def load_alibaba_batch_instances(
 
     tasks: list[Task] = []
     rejected: list[TraceReject] = []
+    stopped_early = False
     seen_ids: set[str] = set()
     for row_number, row in rows:
         if config.max_tasks is not None and len(tasks) >= config.max_tasks:
-            rejected.append(TraceReject(row_number, "max_tasks reached"))
-            continue
+            stopped_early = True
+            break
         try:
             task = _task_from_instance(
                 row, trace_start_s=trace_start_s, config=config, index=len(tasks)
@@ -178,7 +204,143 @@ def load_alibaba_batch_instances(
         seen_ids.add(task.task_id)
         tasks.append(task)
 
-    return TraceLoadResult(tuple(tasks), tuple(rejected), source)
+    return TraceLoadResult(tuple(tasks), tuple(rejected), source, stopped_early=stopped_early)
+
+
+def load_alibaba_2017_batch_tasks(
+    path: str | Path,
+    *,
+    instance_path: str | Path | None = None,
+    config: TraceWorkloadConfig | None = None,
+    trace_start_s: float = 0.0,
+) -> TraceLoadResult:
+    """Load Alibaba 2017's headerless ``batch_task.csv``.
+
+    The 2017 task table supplies creation time and requested CPU. The matching
+    instance table supplies successful execution duration and actual CPU usage,
+    which are used to derive MI. Only jobs represented by one task row are
+    accepted; this avoids silently treating an unknown DAG as independent work.
+    """
+    config = config or TraceWorkloadConfig()
+    if instance_path is None:
+        raise ValueError("instance_path is required for the 2017 adapter")
+    source = str(path)
+    rows: list[tuple[int, dict[str, str]]] = []
+    with Path(path).open(newline="", encoding="utf-8") as handle:
+        for row_number, values in enumerate(csv.reader(handle), start=1):
+            if not values or not any(value.strip() for value in values):
+                continue
+            if len(values) != len(_ALIBABA_2017_BATCH_TASK_FIELDS):
+                rows.append((row_number, {}))
+                continue
+            rows.append(
+                (row_number, dict(zip(_ALIBABA_2017_BATCH_TASK_FIELDS, values, strict=True)))
+            )
+
+    jobs: dict[str, list[tuple[int, dict[str, str]]]] = {}
+    for row_number, row in rows:
+        job_id = row.get("job_id", "").strip()
+        jobs.setdefault(job_id, []).append((row_number, row))
+
+    tasks: list[Task] = []
+    rejected: list[TraceReject] = []
+    auxiliary_rejected: list[TraceReject] = []
+    seen_ids: set[str] = set()
+    origin = trace_start_s
+
+    instance_usage: dict[tuple[str, str], float] = {}
+    with Path(instance_path).open(newline="", encoding="utf-8") as handle:
+        for row_number, values in enumerate(csv.reader(handle), start=1):
+            if not values or not any(value.strip() for value in values):
+                continue
+            if len(values) != 12:
+                auxiliary_rejected.append(
+                    TraceReject(row_number, "invalid batch_instance column count")
+                )
+                continue
+            (
+                start_timestamp,
+                end_timestamp,
+                instance_job_id,
+                instance_task_id,
+                _machine_id,
+                status,
+                _seq_no,
+                _total_seq_no,
+                _real_cpu_max,
+                real_cpu_avg,
+                _real_mem_max,
+                _real_mem_avg,
+            ) = values
+            if status.strip().casefold() not in config.accepted_statuses:
+                continue
+            try:
+                start = float(start_timestamp)
+                end = float(end_timestamp)
+                cpu = float(real_cpu_avg)
+                if not all(math.isfinite(value) for value in (start, end, cpu)):
+                    raise ValueError
+                if end <= start or cpu <= 0:
+                    raise ValueError
+            except ValueError:
+                auxiliary_rejected.append(
+                    TraceReject(row_number, "invalid completed instance metrics")
+                )
+                continue
+            key = (instance_job_id.strip(), instance_task_id.strip())
+            instance_usage[key] = instance_usage.get(key, 0.0) + (
+                (end - start) * cpu * config.reference_mips_per_core
+            )
+
+    stopped_early = False
+    for row_number, row in rows:
+        if config.max_tasks is not None and len(tasks) >= config.max_tasks:
+            stopped_early = True
+            break
+        if config.max_tasks is not None and len(tasks) >= config.max_tasks:
+            break
+        try:
+            job_id = row["job_id"].strip()
+            if not job_id or len(jobs.get(job_id, [])) != 1:
+                raise ValueError("job has multiple task rows; DAG independence unknown")
+            status = row["status"].strip().casefold()
+            if status not in config.accepted_statuses:
+                raise ValueError(f"unaccepted status: {status or '<missing>'}")
+            create_time = _required_float(row, "create_timestamp")
+            plan_cpu = _required_float(row, "plan_cpu")
+            if create_time < origin or plan_cpu <= 0:
+                raise ValueError("invalid timestamp or plan_cpu")
+            task_id = f"job-{job_id}/task-{row['task_id'].strip()}"
+            if not row["task_id"].strip():
+                raise ValueError("missing task_id")
+            if task_id in seen_ids:
+                raise ValueError("duplicate task identifier")
+            key = (job_id, row["task_id"].strip())
+            required_mi = instance_usage.get(key, 0.0)
+            if required_mi <= 0:
+                raise ValueError("no valid completed instances")
+            task = Task(
+                task_id=task_id,
+                device_id=config.device_ids[len(tasks) % len(config.device_ids)],
+                arrival_time_s=create_time - origin,
+                input_size_mb=config.input_size_mb,
+                required_mi=required_mi,
+                result_size_mb=config.result_size_mb,
+                deadline_s=config.deadline_s,
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            rejected.append(TraceReject(row_number, str(error)))
+            continue
+        seen_ids.add(task.task_id)
+        tasks.append(task)
+
+    return TraceLoadResult(
+        tuple(tasks),
+        tuple(rejected),
+        source,
+        auxiliary_rejected=tuple(auxiliary_rejected),
+        stopped_early=stopped_early,
+    )
 
 
 def split_trace_tasks(
@@ -208,6 +370,7 @@ def load_workload(
     count: int = 6,
     seed: int = 7,
     trace_path: str | Path | None = None,
+    trace_instance_path: str | Path | None = None,
     trace_config: TraceWorkloadConfig | None = None,
 ) -> list[Task]:
     """Select either the preserved synthetic generator or the trace adapter."""
@@ -219,4 +382,12 @@ def load_workload(
         if trace_path is None:
             raise ValueError("trace_path is required for source='alibaba'")
         return list(load_alibaba_batch_instances(trace_path, config=trace_config).tasks)
+    if source == "alibaba2017":
+        if trace_path is None:
+            raise ValueError("trace_path is required for source='alibaba2017'")
+        return list(
+            load_alibaba_2017_batch_tasks(
+                trace_path, instance_path=trace_instance_path, config=trace_config
+            ).tasks
+        )
     raise ValueError(f"unknown workload source: {source}")

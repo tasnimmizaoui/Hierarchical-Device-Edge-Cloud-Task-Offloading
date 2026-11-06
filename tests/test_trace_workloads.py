@@ -2,6 +2,7 @@ import pytest
 
 from mec_offloading.trace_workloads import (
     TraceWorkloadConfig,
+    load_alibaba_2017_batch_tasks,
     load_alibaba_batch_instances,
     load_workload,
     split_trace_tasks,
@@ -79,3 +80,68 @@ def test_trace_ids_splits_and_source_selection_are_stable(tmp_path):
 def test_trace_configuration_validates_reference_values():
     with pytest.raises(ValueError):
         TraceWorkloadConfig(reference_mips_per_core=0)
+
+
+def test_max_tasks_stops_without_counting_remaining_rows_as_rejected(tmp_path):
+    path = write_fixture(
+        tmp_path,
+        "".join(
+            f"i-{i},random,job-{i},T,Terminated,{i},{i + 1},m,1,1,50,50,1,1\n"
+            for i in range(3)
+        ),
+    )
+    result = load_alibaba_batch_instances(
+        path, config=TraceWorkloadConfig(max_tasks=1)
+    )
+    assert result.selected_count == 1
+    assert result.rejected_count == 0
+    assert result.stopped_early is True
+
+
+def test_alibaba_2017_task_loader_uses_creation_time_and_requested_cpu(tmp_path):
+    task_path = tmp_path / "batch_task.csv"
+    task_path.write_text(
+        "10,20,job-1,task-1,2,Terminated,3,4\n"
+        "30,40,job-2,task-1,1,Failed,2,4\n",
+        encoding="utf-8",
+    )
+    instance_path = tmp_path / "batch_instance.csv"
+    instance_path.write_text(
+        "12,14,job-1,task-1,1,Terminated,1,1,2,1.5,1,1\n",
+        encoding="utf-8",
+    )
+    result = load_alibaba_2017_batch_tasks(
+        task_path,
+        instance_path=instance_path,
+        config=TraceWorkloadConfig(reference_mips_per_core=1_000),
+    )
+    assert result.selected_count == 1
+    assert result.rejected_count == 1
+    assert result.auxiliary_rejected_count == 0
+    task = result.tasks[0]
+    assert task.arrival_time_s == 10
+    assert task.required_mi == 3_000
+    assert task.task_id == "job-job-1/task-task-1"
+    assert load_workload(
+        "alibaba2017",
+        trace_path=task_path,
+        trace_instance_path=instance_path,
+    ) == [task]
+
+
+def test_alibaba_2017_rejects_multi_task_jobs_to_avoid_unknown_dags(tmp_path):
+    task_path = tmp_path / "batch_task.csv"
+    task_path.write_text(
+        "10,20,job-1,task-1,1,Terminated,1,1\n"
+        "11,21,job-1,task-2,1,Terminated,1,1\n",
+        encoding="utf-8",
+    )
+    instance_path = tmp_path / "batch_instance.csv"
+    instance_path.write_text(
+        "12,14,job-1,task-1,1,Terminated,1,1,1,1,1,1\n"
+        "13,15,job-1,task-2,1,Terminated,1,1,1,1,1,1\n",
+        encoding="utf-8",
+    )
+    result = load_alibaba_2017_batch_tasks(task_path, instance_path=instance_path)
+    assert result.selected_count == 0
+    assert result.rejected_count == 2
