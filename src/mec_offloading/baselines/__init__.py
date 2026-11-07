@@ -2,6 +2,8 @@
 
 from mec_offloading.baselines.policies import (
     AlwaysEdgePolicy,
+    DelayedGreedyComputeEdgePolicy,
+    DelayedGreedyNearestDevicePolicy,
     EDFCloudPolicy,
     EdgeExecutePolicy,
     EdgeForwardPolicy,
@@ -16,6 +18,8 @@ from mec_offloading.baselines.policies import (
 
 __all__ = [
     "AlwaysEdgePolicy",
+    "DelayedGreedyComputeEdgePolicy",
+    "DelayedGreedyNearestDevicePolicy",
     "EDFCloudPolicy",
     "EdgeExecutePolicy",
     "EdgeForwardPolicy",

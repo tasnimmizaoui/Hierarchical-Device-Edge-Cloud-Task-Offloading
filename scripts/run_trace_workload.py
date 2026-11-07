@@ -6,20 +6,19 @@ import argparse
 import csv
 from pathlib import Path
 
-import yaml
-
 from mec_offloading.baselines import (
     AlwaysEdgePolicy,
     EDFCloudPolicy,
     EdgeForwardPolicy,
 )
-from mec_offloading.domain.models import DeviceState
 from mec_offloading.evaluation.runner import aggregate_results
+from mec_offloading.rl.experiment_data import (
+    DEFAULT_TRACE_ARRIVAL_COMPRESSION,
+    compress_arrivals,
+)
 from mec_offloading.simulation import (
-    EdgeConfig,
     SimPyBackend,
-    SimulationConfig,
-    TopologyConfig,
+    load_topology_config,
 )
 from mec_offloading.trace_workloads import (
     TraceWorkloadConfig,
@@ -28,43 +27,6 @@ from mec_offloading.trace_workloads import (
     load_alibaba_batch_instances,
 )
 from mec_offloading.workloads import generate_synthetic_tasks
-
-
-def load_topology(path: Path) -> SimulationConfig:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    topology_data = data["topology"]
-    devices = tuple(
-        DeviceState(
-            device["id"],
-            device["cpu_mips"],
-            device["battery_j"],
-            device["battery_capacity_j"],
-            device["tx_power_w"],
-            device["rx_power_w"],
-            device["cpu_energy_per_mi_j"],
-        )
-        for device in topology_data["devices"]
-    )
-    edges = tuple(
-        EdgeConfig(
-            edge["id"],
-            edge["cpu_mips"],
-            edge["device_edge_bandwidth_mbps"],
-            edge["edge_cloud_bandwidth_mbps"],
-            edge["device_edge_propagation_s"],
-            edge["edge_cloud_propagation_s"],
-        )
-        for edge in topology_data["edges"]
-    )
-    topology = TopologyConfig(
-        devices,
-        edges,
-        tuple(topology_data["device_to_edge"].items()),
-    )
-    return SimulationConfig(
-        cloud_cpu_capacity_mips=data["resources"]["cloud_cpu_mips"],
-        topology=topology,
-    )
 
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -86,16 +48,24 @@ def main() -> None:
     parser.add_argument("--topology-config", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("results/trace-multi-topology"))
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--arrival-compression", type=float)
     args = parser.parse_args()
     source = "alibaba2017" if args.format == "2017-task" else args.source
     source = "alibaba2018" if args.format == "2018-instance" else source
+    arrival_compression = args.arrival_compression
+    if arrival_compression is None:
+        arrival_compression = (
+            1.0 if source == "synthetic" else DEFAULT_TRACE_ARRIVAL_COMPRESSION
+        )
+    if arrival_compression <= 0:
+        parser.error("--arrival-compression must be > 0")
     if source != "synthetic" and args.input is None:
         parser.error("input is required for a trace source")
     if source == "alibaba2017" and args.instances is None:
         parser.error("--instances is required for --source alibaba2017")
 
     topology_config = args.topology_config or Path("configs/alibaba-multi-topology.yaml")
-    simulation_config = load_topology(topology_config)
+    simulation_config = load_topology_config(topology_config)
     device_ids = tuple(device.device_id for device in simulation_config.topology.devices)
     loaded = None
     if source == "synthetic":
@@ -115,6 +85,7 @@ def main() -> None:
         else:
             loaded = load_alibaba_batch_instances(args.input, config=trace_config)
         tasks = list(loaded.tasks)
+    tasks = compress_arrivals(tasks, arrival_compression)
 
     results = SimPyBackend(config=simulation_config).run_episode(
         tasks,
@@ -133,6 +104,7 @@ def main() -> None:
             "completion_time_s": result.completion_time_s,
             "end_to_end_latency_s": result.end_to_end_latency_s,
             "execution_start_time_s": result.execution_start_time_s,
+            "queue_wait_s": result.queue_wait_s,
             "device_energy_j": result.device_energy_j,
             "deadline_met": result.deadline_met,
         }
@@ -150,6 +122,7 @@ def main() -> None:
         print(f"task_rejection_reasons={loaded.rejection_reasons}")
         print(f"instance_rejection_reasons={loaded.auxiliary_rejection_reasons}")
     print(f"topology_config={topology_config}")
+    print(f"arrival_compression={arrival_compression}")
     print(f"task_results={args.output_dir / 'task_results.csv'}")
     print(f"aggregate_metrics={args.output_dir / 'aggregate_metrics.csv'}")
     for row in detailed_rows:

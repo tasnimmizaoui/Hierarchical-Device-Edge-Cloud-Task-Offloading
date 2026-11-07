@@ -1,6 +1,18 @@
 # Coordination hiérarchique V2
 
-`feedback.py` supporte `none`, `periodic` et `frequent`.
+`feedback.py` supporte `none`, `periodic`, `frequent` et `event`.
+Le mode `event` envoie un premier échantillon, puis transmet si le signal
+normalisé de file change d'au moins 0,25 depuis le dernier envoi ou si
+`frequency` observations se sont écoulées. Le délai de transmission
+s'applique à tous les messages, y compris aux rafraîchissements.
+
+Pour reproduire l'ablation événementielle sur Alibaba 2017 depuis la racine
+du dépôt, utiliser les trois graines par défaut et la compression commune.
+
+```bash
+python scripts/run_feedback_ablation.py --feedback-modes event --arrival-compression 0.1360670304522077
+python scripts/summarize_feedback_ablation.py --feedback-modes none periodic frequent event
+```
 
 Le coordinateur envoie des signaux de congestion **uniquement entre voisins**.
 Le signal n'est accessible qu'après son délai de propagation + sérialisation.

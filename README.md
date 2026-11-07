@@ -23,22 +23,47 @@ lit les résultats CSV communs. La V2 ajoute des récompenses terminales par
 tâche, un feedback causal différé, des checkpoints choisis sur validation, des
 ablation de fréquence et le suivi de l'apprentissage. Voir le
 [guide technique et limites de la V2](docs/ETUDIANTE_2_V2_FR.md) et
-[le guide initial de fusion](docs/INTEGRATION_RL.md).
+[le guide initial de fusion](docs/INTEGRATION_RL.md). Le
+[rapport expérimental](docs/rl_experiment_report.md) détaille la comparaison DQN et Double DQN ainsi que le calibrage de charge sur la validation.
 
 ```bash
 pip install -e ".[dev,rl,web]"
-python scripts/train_integrated_rl.py --episodes 18 --tasks 100
-python scripts/compare_integrated_policies.py --seeds 10001 10002 10003 --tasks 100
+python scripts/run_feedback_ablation.py --seeds 42 43 44 \
+  --episodes 12 --tasks 100 --max-trace-tasks 5000
 streamlit run web_app.py
 ```
 
-**État : prototype V2 intégré à valider**, avec tâches synthétiques, topo 1/1/1 et
-feedback différé non bloquant. Les transitions RL sont actuellement des décisions
-terminales par tâche (formulation contextuelle), pas un environnement Gymnasium
-multi-étapes. Un adaptateur Alibaba est disponible pour un petit échantillon
-local, mais la topologie multi-edge et les expériences finales restent à
-implémenter. Réentraîner les modèles : les anciens
-checkpoints du simulateur de démonstration RL.zip sont incompatibles.
+Le mode par défaut utilise des tâches synthétiques et la topologie de
+développement 1/1/1. Pour le jeu Alibaba local et la topologie configurée
+(24 devices, 3 edges, cloud partagé), utiliser le même trace et la même limite
+pour entraînement et test. Le mode de charge contendu calibré est `k=0.136067` :
+
+```bash
+python scripts/train_integrated_rl.py --source alibaba2017 --episodes 18 \
+  --tasks 100 --max-trace-tasks 5000 --topology-augmentation sweep \
+  --arrival-compression 0.136067 --seed 42
+python scripts/compare_integrated_policies.py --source alibaba2017 \
+  --feedback periodic --seeds 10001 10002 10003 --tasks 5000 \
+  --max-trace-tasks 5000 --models artifacts/models/integrated
+```
+
+Le loader joint et transforme les CSV en tâches, puis crée des splits
+chronologiques train/validation/test. Les données préparées ne sont pas
+persistées : elles sont reparsées à chaque commande. Alibaba ne fournit pas
+tous les champs MEC ; les payloads, deadlines et affectations sont des
+hypothèses, documentées dans
+[`docs/ETUDIANTE_2_V2_FR.md`](docs/ETUDIANTE_2_V2_FR.md).
+
+Le protocole actuel entraîne sur neuf des 13 variantes et garde quatre
+topologies (dont `combined_stress`) pour le test final. Le tableau de bord compare les résultats DQN et Double DQN par topologie. La méthode et les limites sont dans
+[`docs/INTEGRATION_RL.md`](docs/INTEGRATION_RL.md).
+
+**Limite de capacité :** le SimPy backend supporte plusieurs devices et edges,
+mais un seul slot CPU par device/edge et un worker Cloud. Il n'est pas encore
+multi-core/multi-worker. Le DQN intégré donne un crédit terminal par tâche ;
+il s'agit d'une formulation contextuelle à un pas, pas d'un environnement
+Gymnasium multi-étapes. Réentraîner les modèles après tout changement de schéma
+d'observation ou de topologie.
 
 ## Scope rule
 
@@ -49,7 +74,7 @@ Complete the mandatory three-agent system, baselines and reproducible experiment
 | Student | Owns | Main outputs |
 |---|---|---|
 | **Student 1 — Simulation & Evaluation** | Simulator feasibility and implementation, workload adapter, topology, compute/network queues, energy and latency model, Random/Greedy/EDF baselines, experiment runner and metric validation | Working simulator, trace/synthetic workload pipeline, baseline policies, metric tests, reproducible CSV runs |
-| **Student 2 — RL & Coordination** | Gymnasium environments, device/edge/cloud agents, reward design, training, feedback protocol and centralized RL baseline | Three policy agents, model checkpoints, training configs/logs, centralized RL, coordination variants |
+| **Student 2 — RL & Coordination** | Device/edge/cloud agents, reward design, training, feedback protocol and centralized RL baseline | Three policy agents, model checkpoints, training configs/logs, centralized RL, coordination variants |
 | **Both** | Freeze interfaces, integration, end-to-end tests, experiment protocol, result analysis, IEEE article, oral presentation and demo | Integrated system and complete submission |
 
 Ownership is primary responsibility, not exclusive knowledge. Both students must be able to explain and reproduce the complete system.
@@ -61,8 +86,11 @@ Ownership is primary responsibility, not exclusive knowledge. Both students must
   MEC model ourselves so device, edge, and cloud decisions remain separate.
   The decision and source-code evidence are in
   [`docs/decisions/0001-simulator-selection.md`](docs/decisions/0001-simulator-selection.md).
-- **Gymnasium** for the RL environment contract.
-- **Stable-Baselines3** for DQN/PPO experiments.
+- Gymnasium is an optional dependency for environment adapters; the current
+  integrated Double-DQN workflow calls the shared policy interfaces directly
+  and is not a multi-step `gymnasium.Env`.
+- The current Double-DQN implementation uses the project's PyTorch agent, not
+  Stable-Baselines3.
 - **NumPy, Pandas, Matplotlib, PyYAML** for computation, data and analysis.
 - **pytest + Ruff + GitHub Actions** for tests, linting and reproducibility checks.
 
@@ -149,9 +177,10 @@ Read the documentation in this order:
 
 ## Trace workload status
 
-The repository does not contain Alibaba raw data or a processed trace sample.
-The additive loader is ready for a locally obtained, small 2017
-`batch_task.csv`/`batch_instance.csv` subset:
+The raw dataset files are local inputs and are not committed as a processed,
+canonical MEC dataset. The Alibaba 2017 loader joins `batch_task.csv` and
+`batch_instance.csv`, applies the documented mapping/rejections, and returns
+the shared `Task` objects:
 
 ```bash
 python scripts/prepare_trace_sample.py data/raw/batch_task.csv \
@@ -161,14 +190,14 @@ python scripts/run_trace_workload.py data/raw/batch_task.csv \
 ```
 
 See [`docs/trace-data-notes.md`](docs/trace-data-notes.md) for the verified
-schema mapping, synthetic MEC assumptions, rejection counts, and chronological
-train/validation/test splitting. Student 2 can continue current synthetic RL
-training now; trace-backed RL training still requires joint agreement on the
-workload-source CLI and split configuration.
+schema mapping, synthetic MEC assumptions, current audit counts, and
+chronological train/validation/test splitting. The RL training/compare commands
+also use this loader with `--source alibaba2017`; inputs are parsed again on
+each run, and no reusable processed cache is currently written.
 
 ## Run a trace workload on the multi-device topology
 
-After obtaining the local Alibaba 2017 files, run:
+With the local Alibaba 2017 files, run:
 
 ```bash
 python scripts/run_trace_workload.py \
@@ -186,10 +215,11 @@ to `edge-2`; these IDs select actual SimPy resources. The command writes
 `results/trace-multi-topology/`. Use `--source synthetic` without an input
 file to run the same topology with the preserved synthetic generator.
 
-Student 1 owns the simulator and evaluation. Student 2 can begin with the
-mock Gymnasium environment, then implement RL adapters that satisfy the
-protocols in `src/mec_offloading/domain/ports.py`. The simulator/domain layers
-must not import Gymnasium or Stable-Baselines3.
+Student 1 owns the simulator and physical workload/resource model. Student 2's
+integrated RL adapters satisfy the protocols in
+`src/mec_offloading/domain/ports.py` and train/evaluate through that same
+backend. The simulator/domain layers must not import Gymnasium or
+Stable-Baselines3.
 
 The exact acceptance criteria and task owners are in `docs/task-board.md` and `docs/first-week-plan.md`.
 
