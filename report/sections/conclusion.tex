@@ -1,18 +1,24 @@
 \section{Conclusion and Perspectives}
-The repository currently supports a coherent three-tier SimPy execution model,
-separate device/edge/cloud policy contracts, explicit queues and links, device
-energy accounting, baseline metrics, and tested Double-DQN/feedback adapters.
-The committed baseline campaign is useful evidence that route and queue
-changes affect latency, deadlines, energy, and traffic; it is not evidence of
-universal superiority. Its main scientific limitation is that the integrated
-learning code assigns terminal credit per task and therefore does not yet
-constitute sequential hierarchical multi-agent RL.
+This paper documents a three-tier SimPy architecture and a five-seed,
+five-noise-seed study of DQN and Double DQN on an Alibaba-derived independent
+task workload. The evidence is mixed by design: DQN has higher mean reference
+success in none, periodic, and frequent feedback, whereas Double DQN reduces
+mean energy in all three modes and reduces P95 in none and frequent modes.
+Paired intervals include zero, held-out topologies reverse some comparisons,
+event feedback trades roughly 70\% less control traffic for higher P95 at the
+0.5 threshold, and fixed SPT beats the learned cloud rule in the reported
+ablation. These findings support careful scenario analysis, not a universal
+hierarchical-RL ranking.
 
-Before a final claim, the project should run the integrated training and
-comparison scripts, archive checkpoints and metadata, evaluate a real local
-Alibaba 2017 sample with chronological splits, and perform matched
-multi-device/multi-edge experiments. Feedback should eventually contend for
-control-plane capacity if communication overhead is a research outcome. A
-multi-worker cloud, independent-task versus DAG workload comparison, calibrated
-energy model, confidence intervals, and a stepable Gymnasium interface are
-also required. Federated RL is future work rather than a current contribution.
+Important limitations remain. Alibaba is a datacenter trace adapted with
+synthetic MEC payloads, deadlines, batteries, links, capacities, and device
+assignments. The simulator filters multi-task jobs rather than reconstructing
+DAGs, uses one cloud worker, and models feedback as non-blocking control
+traffic. The learning formulation is not a full sequential multi-agent
+Gymnasium environment; cloud next-decision credit and the queue reward are
+proxies. The campaign artifacts are documented but excluded from Git, so the
+reported values require artifact release for independent reproduction.
+Future work should release trace fingerprints and checkpoints, model
+control-plane contention, add multi-worker cloud resources, evaluate DAGs and
+calibrated energy, and implement a stepable multi-agent environment.
+Federated RL remains future work rather than a contribution of this paper.

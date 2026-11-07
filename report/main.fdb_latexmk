@@ -1,0 +1,13 @@
+# Fdb version 3
+["pdflatex"] 1794084451 "/home/tasnim/hierarchical-mec-offloading/report/main.tex" "main.pdf" "main" 1794084451
+  "/etc/texmf/web2c/texmf.cnf" 1789819206 475 c0e671620eb5563b2130f56340a5fde8 ""
+  "/home/tasnim/hierarchical-mec-offloading/report/main.tex" 1794082505 2201 4e0dc43bf2e2304fc302f49f8ecc25c2 ""
+  "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1644012257 39432 7155514e09a3d69036fac785183a21c2 ""
+  "/usr/share/texmf/web2c/texmf.cnf" 1644012257 39432 7155514e09a3d69036fac785183a21c2 ""
+  "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1789819226 1412514 692b4e51eaa2ba06da369188f6b81c8a ""
+  "IEEEtran.cls" 0 -1 0 ""
+  "main.aux" 1794084451 32 3985256e7290058c681f74d7a3565a19 ""
+  "main.tex" 1794082505 2201 4e0dc43bf2e2304fc302f49f8ecc25c2 ""
+  (generated)
+  "main.log"
+  "main.pdf"

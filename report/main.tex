@@ -7,36 +7,34 @@
 \usepackage{url}
 
 \title{Hierarchical Device--Edge--Cloud Task Offloading:\\
-Implementation Audit and Reproducible Simulation Baselines}
+An Experimental Study of DQN, Double DQN, Feedback, and Cloud Scheduling}
 
-\author{
-\IEEEauthorblockN{Student 1 and Student 2}
+\author{\IEEEauthorblockN{Tasnim Mizaoui, Farah Cherif, Farah Cherif, and Doua Bousnina}
 \IEEEauthorblockA{INSAT, Tunis, Tunisia\\
-\{student1,student2\}@example.invalid}
-}
+}}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-This paper documents an auditable implementation of hierarchical task
-offloading across device, edge, and cloud tiers. The repository provides a
-discrete-event SimPy backend with separate device-placement, edge-placement,
-and cloud-queue decisions, shared resource queues, network serialization, and
-device energy accounting. Four Double-DQN adapters are integrated at the
-policy boundary, but their current formulation assigns terminal credit to
-each task decision and is therefore a contextual one-step formulation rather
-than a sequential multi-agent Gymnasium environment. The committed
-quantitative evidence is a three-seed, ten-task synthetic baseline campaign.
-Cloud forwarding reduced mean latency from 3.164 s for local execution to
-0.513 s, while increasing communication traffic; all cloud and edge
-placements met the deadlines in this smoke workload, whereas local execution
-met 36.7\% of deadlines. These results validate the execution and metric
-pipeline, not general policy superiority. Integrated-RL comparison artifacts,
-public-trace results, and final multi-edge learning experiments are not
-committed and are consequently reported as open validation work. The paper
-states the simulator assumptions, trace mapping, policy contracts, and
-limitations needed for reproducible follow-up experiments.
+This paper presents an auditable device--edge--cloud offloading system and a
+documented experimental study of heuristic, centralized DQN, hierarchical
+DQN, and hierarchical Double DQN policies under delayed feedback. The
+canonical SimPy backend separates device placement, edge forwarding, and
+shared-cloud scheduling, while the learning integration uses per-decision
+observations and task or next-decision credit rather than a complete
+sequential multi-agent Gymnasium environment. The primary campaign replays
+579 chronologically held-out tasks derived from Alibaba Cluster Trace 2017
+after independent-task filtering; 2,891 accepted tasks are split into 1,734
+training, 578 validation, and 579 test tasks and mapped to 24 devices, 3
+edges, and one shared cloud worker. On the matched reference-topology
+comparison, centralized DQN has the highest mean deadline success (77.41\%),
+Greedy/EDF the lowest mean P95 latency (12.95 s), and Greedy/FIFO and
+Greedy/EDF the lowest mean device energy (0.211 J/task). Hierarchical Double
+DQN reduces P95 and energy relative to hierarchical DQN, but has slightly
+lower success. Supporting feedback and topology studies expose further
+reversals, including a roughly 70\% traffic reduction at an event threshold
+with a latency cost. The findings are descriptive and scenario-specific.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -47,9 +45,7 @@ discrete-event simulation, Double-DQN, reproducibility
 \input{sections/introduction}
 \input{sections/related_work}
 \input{sections/system_model}
-\input{sections/proposed_method}
 \input{sections/implementation}
-\input{sections/evaluation}
 \input{sections/conclusion}
 
 \bibliographystyle{IEEEtran}

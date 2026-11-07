@@ -1,49 +1,125 @@
-\section{Architecture and System Model}
-\subsection{Three-tier topology}
-The canonical topology contains devices, associated edge servers, and one
-shared cloud scheduler. The default development configuration is one
-device--one edge--one cloud; the backend also accepts an explicit topology with
-three devices, two edges, and fixed device-to-edge associations. A task cannot
-choose an arbitrary edge. The explanatory architecture is shown in
-Fig.~\ref{fig:architecture}.
+\section{Architecture and Proposed Approach}
+\subsection{Three-tier architecture}
+The system has device, edge, and cloud decision levels. A device executes
+locally or sends a task to its fixed associated edge. The edge executes the
+task or forwards it to a shared cloud scheduler. The cloud chooses a queue
+discipline when a worker becomes available. The small simulator demonstration
+uses three devices and two edges; the RL campaign instead uses 24 devices,
+three edges, and one shared cloud. Device-to-edge associations are explicit,
+not learned as arbitrary routing choices. The campaign association is
+round-robin across the three edges, as shown in Fig.~\ref{fig:topology}.
+The decision boundaries are shown in Fig.~\ref{fig:architecture}.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/architecture.pdf}
-\caption{Implemented decision boundaries and task route.}
+\caption{Implemented device--edge--cloud decision boundaries.}
 \label{fig:architecture}
 \end{figure}
 
-\subsection{Task and resource model}
-Each task has arrival time, decimal-MB input and result sizes, required MI, a
-relative deadline, device identifier, and optional priority. Execution time is
-\begin{equation}
-t_{\mathrm{cpu}} = \frac{\mathrm{MI}}{\mathrm{MIPS}}.
-\end{equation}
-For a link with bandwidth $B$ Mbps, propagation $p$, and queue wait $q$,
-\begin{equation}
-t_{\mathrm{link}} = \frac{8s}{B} + p + q,
-\end{equation}
-where $s$ is decimal MB. End-to-end latency is completion minus arrival, and
-a deadline is met when completion is no later than arrival plus the relative
-deadline.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/topology_24_devices.pdf}
+\caption{Reference RL topology: 24 devices, three associated edges, and one
+shared cloud worker.}
+\label{fig:topology}
+\end{figure}
 
-Every device and edge has a capacity-one SimPy resource. The cloud has one
-worker in the current implementation; its policy chooses EDF, shortest
-processing time, or FIFO when dispatching a queued job. Device energy uses
-CPU energy per MI and transmit/receive power times radio duration. Idle,
-reception infrastructure, retransmission, and cloud energy are not modeled.
-
-\subsection{Lifecycle and metrics}
+\subsection{Task lifecycle and resource model}
 The lifecycle is arrival, device decision, optional device--edge upload, edge
-decision, optional edge--cloud upload and cloud dispatch, execution, and result
-return. Queues contribute waiting time. The result records route, timing,
-deadline status, device energy, communication delay and bytes. Fig.~\ref{fig:lifecycle}
-illustrates the route without implying that all routes use cloud.
+decision, optional edge--cloud upload, cloud dispatch, execution, and result
+return. Queues contribute waiting time, and every modeled link contributes
+serialization, propagation, and resource queue delay. Fig.~\ref{fig:lifecycle}
+illustrates these paths.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/task_lifecycle.pdf}
-\caption{Task lifecycle through queues, links, and result return.}
+\caption{Task lifecycle through queues, links, execution, and result return.}
 \label{fig:lifecycle}
+\end{figure}
+
+Each task has arrival time, decimal-MB input and result sizes, required MI,
+device identifier, relative deadline, and priority. For demand $w$ MI and
+capacity $c$ MIPS,
+\begin{equation}
+t_{\mathrm{cpu}} = w/c.
+\end{equation}
+For payload $s$ decimal MB, bandwidth $B$ Mbps, propagation $p$, and queue
+wait $q$,
+\begin{equation}
+t_{\mathrm{link}} = 8s/B+p+q.
+\end{equation}
+Latency is completion minus arrival, and a task meets its deadline when
+$t_{\mathrm{completion}}\leq t_{\mathrm{arrival}}+D$. Devices and edges use
+capacity-one SimPy resources. The current cloud has one worker and chooses
+EDF, shortest processing time (SPT), or FIFO. Device energy includes CPU
+energy per MI and transmit/receive power times radio duration; idle,
+reception-infrastructure, retransmission, and cloud energy are not modeled.
+
+\subsection{Observations and actions}
+The device observation contains normalized work, input size, deadline slack,
+battery fraction, device capacity, device--edge link state, and an optional
+delayed edge-congestion signal. Its actions are local execution and edge
+offloading. The edge observes task demand and deadline, edge queue/utilization,
+edge capacity, edge--cloud link state, and an optional delayed cloud signal.
+Its actions are edge execution and cloud forwarding. The cloud observes queue
+length, deadline summaries, estimated service time, and oldest wait; its
+actions are EDF, SPT, and FIFO. A centralized comparator uses a 15-feature
+global observation and selects device, edge, or cloud, with fixed EDF cloud
+dispatch. Lower-tier hierarchical agents do not receive raw global state.
+
+\subsection{Learning and reward}
+The DQN and Double DQN agents use two hidden layers of 64 units, replay
+capacity 8,000, batch size 32, learning rate $3\mathord{\times}10^{-4}$,
+target updates every 500 optimization steps, and Smooth L1 loss. Double DQN
+selects the next action with the online network and evaluates it with the
+target network; DQN takes the target-network maximum.
+
+For non-cloud decisions, the shared terminal reward is
+\begin{equation}
+\begin{aligned}
+R=-\bigg(&w_l\min\left(1,\frac{\log(1+L/D)}{\log(10001)}\right)
++w_e\min\{3,E/E_0\}\\
+&+w_d\mathbb{1}[\mathrm{miss}]
++w_c\min\{3,F/F_0\}\bigg),
+\end{aligned}
+\end{equation}
+with $(w_l,w_e,w_d,w_c)=(0.35,0.25,0.35,0.05)$. Here $L$, $D$, $E$, and
+$F$ denote end-to-end latency in seconds, deadline in seconds, device energy
+in joules, and feedback bytes. The implementation uses $E_0=0.3$ J and
+$F_0=64$ bytes from the default \texttt{RewardWeights} configuration; these
+are normalization references, not measured campaign means. The miss indicator
+is one when a deadline-feasible task misses its deadline. The cloud uses a
+queue-waiting-cost reward for contested dispatches, so its objective is not
+identical to the shared task reward.
+
+The implementation is not a complete sequential multi-agent Gymnasium
+environment. Device and edge decisions receive terminal per-task credit. The
+RL campaign's cloud controller additionally uses next-decision credit with
+$\gamma=0.9$ across contested dispatch decisions; singleton cloud queues are
+omitted because all three rules select the same job. Fig.~\ref{fig:rl}
+summarizes the distinction.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/hierarchical_rl.pdf}
+\caption{Local observations and terminal or next-decision credit.}
+\label{fig:rl}
+\end{figure}
+
+\subsection{Feedback}
+Feedback is adjacent-tier and causal. A snapshot sampled at time $t$ is
+available only after modeled propagation and serialization, at a later
+decision. Conditions are none, periodic, frequent, and event-triggered. The
+event trigger sends an initial snapshot, sends when the signal change reaches a
+threshold, and refreshes after five observations. Feedback bytes, modeled
+delay, and information age are recorded, but messages do not contend with
+data-plane links. Fig.~\ref{fig:coordination} shows this control path.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/coordination.pdf}
+\caption{Causal adjacent-tier feedback with a non-blocking control plane.}
+\label{fig:coordination}
 \end{figure}
