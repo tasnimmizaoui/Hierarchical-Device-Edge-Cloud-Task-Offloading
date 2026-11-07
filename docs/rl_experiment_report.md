@@ -75,6 +75,11 @@ success and 16.61 s mean P95, compared with 74.95% and 17.46 s for
 Double DQN. Mean feedback traffic is 11,988 and 11,087 bytes per
 run respectively. Each learner has five training seeds and each
 checkpoint is evaluated at its own trained threshold.
+The paired Double DQN minus DQN differences are +1.88 percentage
+points in success (descriptive 95% bootstrap interval +0.37 to
++3.25) and +0.85 s in P95 (−1.80 to +3.48). Mean feedback age is
+65.54 s for DQN and 69.37 s for Double DQN. Those means apply to
+snapshots consumed at decisions.
 
 ## Cloud rule ablation on sequential-credit checkpoints
 
@@ -315,3 +320,7 @@ device energy, communication/feedback bytes, and feedback age. For the four held
 `--scenario alibaba2017_test:edge_cloud_link_fast`, or
 `--scenario alibaba2017_test:combined_stress`. For a comparison between algorithms, use only conditions with the same
 feedback mode, threshold and complete set of paired training seeds.
+Use `--algorithms dqn double-dqn --matched-event-only` to retain
+each event checkpoint's trained threshold when replay grids differ.
+The summarizer checks the remaining configuration and requires one
+matched event result per evaluation noise seed.
