@@ -70,16 +70,23 @@ The event threshold of 0.5 uses 10,430 feedback bytes per run, versus
 feedback bytes, accompanied by a higher P95. Comparisons across modes
 include their different feedback costs in the reward.
 
-At the matched event threshold of 0.25, DQN reaches 73.07% deadline
-success and 16.61 s mean P95, compared with 74.95% and 17.46 s for
-Double DQN. Mean feedback traffic is 11,988 and 11,087 bytes per
-run respectively. Each learner has five training seeds and each
-checkpoint is evaluated at its own trained threshold.
-The paired Double DQN minus DQN differences are +1.88 percentage
-points in success (descriptive 95% bootstrap interval +0.37 to
-+3.25) and +0.85 s in P95 (−1.80 to +3.48). Mean feedback age is
-65.54 s for DQN and 69.37 s for Double DQN. Those means apply to
-snapshots consumed at decisions.
+The event comparison evaluates each checkpoint at its trained
+threshold. Each row below averages five training seeds and five
+noise runs per seed on the reference topology.
+
+| Threshold | Algorithm | Success | P95 | Device energy per task | Feedback bytes per run | Mean feedback age |
+|---|---|---:|---:|---:|---:|---:|
+| 0.25 | DQN | 73.07% | 16.61 s | 0.234 J | 11,988 | 65.54 s |
+| 0.25 | Double DQN | 74.95% | 17.46 s | 0.271 J | 11,087 | 69.37 s |
+| 0.5 | DQN | 74.75% | 16.74 s | 0.329 J | 10,687 | 67.97 s |
+| 0.5 | Double DQN | 74.98% | 17.80 s | 0.213 J | 10,431 | 68.80 s |
+
+At threshold 0.25, the paired Double DQN minus DQN difference is
++1.88 percentage points in success (descriptive 95% bootstrap
+interval +0.37 to +3.25) and +0.85 s in P95 (−1.80 to +3.48).
+At 0.5, the differences are +0.23 points (−1.18 to +1.68) and
++1.05 s (−0.54 to +2.76). Feedback age is averaged over snapshots
+consumed at decisions.
 
 ## Cloud rule ablation on sequential-credit checkpoints
 
