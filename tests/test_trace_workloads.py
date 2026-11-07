@@ -9,6 +9,7 @@ from mec_offloading.trace_workloads import (
     load_alibaba_2017_batch_tasks,
     load_alibaba_batch_instances,
     load_workload,
+    payload_mb,
     split_trace_tasks,
 )
 
@@ -111,7 +112,8 @@ def test_alibaba_2017_task_loader_uses_creation_time_and_requested_cpu(tmp_path)
     )
     instance_path = tmp_path / "batch_instance.csv"
     instance_path.write_text(
-        "12,14,job-1,task-1,1,Terminated,1,1,2,1.5,1,1\n",
+        "12,14,job-1,task-1,1,Terminated,1,1,2,1.5,1,1\n"
+        "12,16,job-1,task-1,2,Terminated,1,1,2,1.0,1,1\n",
         encoding="utf-8",
     )
     result = load_alibaba_2017_batch_tasks(
@@ -124,8 +126,9 @@ def test_alibaba_2017_task_loader_uses_creation_time_and_requested_cpu(tmp_path)
     assert result.auxiliary_rejected_count == 0
     task = result.tasks[0]
     assert task.arrival_time_s == 10
-    assert task.required_mi == 3_000
+    assert task.required_mi == 3_500
     assert task.task_id == "job-job-1/task-task-1"
+    assert task.input_size_mb == payload_mb(task.task_id)
     assert load_workload(
         "alibaba2017",
         trace_path=task_path,
@@ -213,3 +216,12 @@ def test_trace_tasks_run_on_configured_multi_device_topology(tmp_path):
     }
     assert {result.source_edge_id for result in results} == {"edge-1", "edge-2"}
     assert all(result.route[-1].value == "cloud" for result in results)
+
+
+def test_log_normal_payloads_are_stable_heterogeneous_and_bounded():
+    first = payload_mb("task-a")
+    second = payload_mb("task-b")
+    assert first == payload_mb("task-a")
+    assert first != second
+    assert 0 < first <= 50.0
+    assert 0 < second <= 50.0

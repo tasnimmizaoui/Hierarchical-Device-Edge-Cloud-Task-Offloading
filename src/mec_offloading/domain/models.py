@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -24,6 +25,7 @@ class Task:
     result_size_mb: float
     deadline_s: float
     priority: int = 0
+    estimated_required_mi: float | None = None
 
     def __post_init__(self) -> None:
         if not self.task_id:
@@ -44,6 +46,20 @@ class Task:
             raise ValueError("required_mi must be > 0")
         if self.deadline_s <= 0:
             raise ValueError("deadline_s must be > 0")
+        if self.estimated_required_mi is not None and (
+            not math.isfinite(self.estimated_required_mi)
+            or self.estimated_required_mi <= 0
+        ):
+            raise ValueError("estimated_required_mi must be > 0 when provided")
+
+    @property
+    def estimated_work_mi(self) -> float:
+        """Return the scheduler-visible work estimate, falling back to known work."""
+        return (
+            self.required_mi
+            if self.estimated_required_mi is None
+            else self.estimated_required_mi
+        )
 
     @property
     def absolute_deadline_s(self) -> float:
@@ -82,12 +98,19 @@ class DeviceState:
     tx_power_w: float
     rx_power_w: float
     cpu_energy_per_mi_j: float
+    cpu_utilization: float = 0.0
+    queue_wait_s: float = 0.0
+    queue_length: int = 0
 
     def __post_init__(self) -> None:
         if self.cpu_capacity_mips <= 0 or self.battery_capacity_j <= 0:
             raise ValueError("device CPU and battery capacity must be > 0")
         if not 0 <= self.battery_j <= self.battery_capacity_j:
             raise ValueError("battery_j must be in [0, battery_capacity_j]")
+        if not 0.0 <= self.cpu_utilization <= 1.0:
+            raise ValueError("cpu_utilization must be between 0 and 1")
+        if self.queue_wait_s < 0 or self.queue_length < 0:
+            raise ValueError("queue metrics must be >= 0")
         for field_name in ("tx_power_w", "rx_power_w", "cpu_energy_per_mi_j"):
             if getattr(self, field_name) < 0:
                 raise ValueError(f"{field_name} must be >= 0")
@@ -149,8 +172,11 @@ class TaskResult:
     feedback_messages: int = 0
     feedback_bytes: int = 0
     feedback_modeled_delay_s: float = 0.0
+    feedback_age_s: float = 0.0
+    feedback_age_samples: int = 0
     source_device_id: str = ""
     source_edge_id: str | None = None
+    queue_wait_s: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,3 +188,5 @@ class QueueSummary:
     mean_remaining_deadline_s: float
     mean_execution_time_s: float
     oldest_wait_s: float
+    near_deadline_count: int = 0
+    workload_ratio: float = 1.0

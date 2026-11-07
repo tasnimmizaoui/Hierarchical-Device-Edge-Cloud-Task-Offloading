@@ -13,16 +13,39 @@ import streamlit as st
 
 st.set_page_config(page_title="MEC · Device / Edge / Cloud", layout="wide", page_icon="☁️")
 st.title("☁️ Offloading Device → Edge → Cloud/HPC")
-st.caption("Projet 05 · Étudiante 2 / intégration RL · Dashboard de développement")
+st.caption("Projet 05 · Futurs réseaux mobiles · Résultats de simulation")
 
-result_dir = Path(st.sidebar.text_input("Dossier des évaluations", "results/integrated-comparison"))
-model_dir = Path(st.sidebar.text_input("Dossier des entraînements", "artifacts/models/integrated"))
+result_dir = Path(st.sidebar.text_input(
+    "Dossier de comparaison",
+    "results/cloud-pilot-learned/fb-frequent-seed-42-terminal",
+))
+model_dir = Path(st.sidebar.text_input(
+    "Dossier du modèle",
+    "artifacts/models/cloud-pilot-learned/fb-frequent-seed-42-terminal",
+))
+reference_topology_dir = Path(st.sidebar.text_input(
+    "Balayage topologie de référence",
+    "results/alibaba-topology-sensitivity-v8",
+))
+robust_topology_dir = Path(st.sidebar.text_input(
+    "Balayage topologie du modèle robuste",
+    "results/alibaba-topology-sensitivity-robust-v9",
+))
 
 metadata_file = result_dir / "metadata.json"
 if metadata_file.is_file():
     metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-    st.warning("Données de développement SYNTHÉTIQUES — topo 1 device / 1 edge / 1 cloud. "
-               "Les résultats ne valident pas encore une trace Alibaba/Google.")
+    if metadata.get("workload_source") == "alibaba2017":
+        st.info(
+            "Alibaba Cluster Trace 2017, mappée sur des ressources MEC simulées. "
+            "Les capacités, liens, deadlines, affectations et concurrence sont "
+            "des hypothèses; ce n'est pas une validation de déploiement."
+        )
+    else:
+        st.warning(
+            "Données de développement SYNTHÉTIQUES. "
+            "Elles ne valident pas encore une trace Alibaba/Google."
+        )
     st.caption(f"Moteur : {metadata.get('simulator', 'SimPy')} · "
                f"Seeds test : {metadata.get('test_seeds', 'non précisées')} · "
                f"Scénarios : {metadata.get('scenarios', ['nominal'])}")
@@ -36,6 +59,24 @@ summary = pd.read_csv(summary_file) if summary_file.is_file() else pd.DataFrame(
 details = pd.read_csv(detail_file) if detail_file.is_file() else pd.DataFrame()
 training_file = model_dir / "training_log.csv"
 training = pd.read_csv(training_file) if training_file.is_file() else pd.DataFrame()
+topology_tables = []
+topology_metadata = {}
+for label, directory in (
+    ("Référence v8", reference_topology_dir),
+    ("Entraînement robuste v9", robust_topology_dir),
+):
+    metrics_path = directory / "topology_metrics.csv"
+    metadata_path = directory / "metadata.json"
+    if metrics_path.is_file():
+        table = pd.read_csv(metrics_path)
+        table["checkpoint"] = label
+        topology_tables.append(table)
+    if metadata_path.is_file():
+        topology_metadata[label] = json.loads(metadata_path.read_text(encoding="utf-8"))
+topology_summary = (
+    pd.concat(topology_tables, ignore_index=True)
+    if topology_tables else pd.DataFrame()
+)
 for table in (summary, details):
     if not table.empty:
         if "scenario" not in table:
@@ -43,8 +84,12 @@ for table in (summary, details):
         if "feedback_mode" not in table:
             table["feedback_mode"] = "n/a"
 
-overview, training_tab, coordination, explorer = st.tabs([
-    "📊 Comparaison", "🧠 Entraînement RL", "📡 Coordination", "🔍 Parcours des tâches",
+overview, training_tab, topology_tab, coordination, explorer = st.tabs([
+    "📊 Comparaison",
+    "🧠 Entraînement RL",
+    "🌐 Robustesse topologie",
+    "📡 Coordination",
+    "🔍 Parcours des tâches",
 ])
 
 with overview:
@@ -86,7 +131,7 @@ with overview:
                 st.markdown("**Latence P95 (s)**")
                 st.bar_chart(means["p95_latency_s"])
             st.markdown("**Mesures par seed, sans moyenne inter-scénarios**")
-            st.dataframe(data, use_container_width=True, hide_index=True)
+            st.dataframe(data, width="stretch", hide_index=True)
             st.download_button("Exporter le résumé CSV", data.to_csv(index=False),
                                "summary_filtered.csv", "text/csv")
 
@@ -122,13 +167,117 @@ with training_tab:
             st.line_chart(valid.pivot_table(
                 index="episode", columns="tier", values="team_task_reward", aggfunc="mean",
             ))
-            st.dataframe(valid, use_container_width=True, hide_index=True)
+            st.dataframe(valid, width="stretch", hide_index=True)
         model_metadata = model_dir / "metadata.json"
         if model_metadata.exists():
             config = json.loads(model_metadata.read_text(encoding="utf-8"))
             st.caption("Meilleurs checkpoints sélectionnés sur validation; "
                        f"seeds = {config.get('validation_seeds', [])}. "
                        "Fichiers finaux non sélectionnés : last/.")
+            topology_training = config.get("topology_training", {})
+            if topology_training.get("augmentation") == "sweep":
+                st.markdown("**Topologies d'entraînement**")
+                st.caption(
+                    "Sélection de checkpoint: "
+                    f"{topology_training.get('checkpoint_selection', 'non précisée')}"
+                )
+                counts = pd.Series(
+                    topology_training.get("episode_variant_counts", {}),
+                    name="episodes",
+                )
+                if not counts.empty:
+                    st.bar_chart(counts)
+                st.write(
+                    "Topologies de validation:",
+                    ", ".join(topology_training.get("validation_variants", [])),
+                )
+
+with topology_tab:
+    if topology_summary.empty:
+        st.info(
+            "Aucun balayage de sensibilité trouvé. Exécuter "
+            "`python scripts/sweep_topologies.py` pour créer les métriques."
+        )
+    else:
+        metric_labels = {
+            "deadline_success_rate": "Respect brut des deadlines",
+            "feasible_deadline_success_rate": "Respect des deadlines faisables",
+            "median_latency_s": "Latence médiane (s)",
+            "p95_latency_s": "Latence P95 (s)",
+            "mean_device_energy_j": "Énergie moyenne device (J)",
+            "communication_bytes": "Octets de communication",
+        }
+        selected_metric = st.selectbox(
+            "Mesure à comparer",
+            list(metric_labels),
+            format_func=lambda value: metric_labels[value],
+            key="topology_metric",
+        )
+        checkpoints = sorted(topology_summary["checkpoint"].unique().tolist())
+        selected_checkpoints = st.multiselect(
+            "Checkpoints",
+            checkpoints,
+            default=checkpoints,
+            key="topology_checkpoints",
+        )
+        policies = sorted(topology_summary["policy"].unique().tolist())
+        selected_policies = st.multiselect(
+            "Politiques",
+            policies,
+            default=[
+                policy for policy in (
+                    "greedy_edf",
+                    "hierarchical_periodic",
+                    "centralized_rl",
+                )
+                if policy in policies
+            ],
+            key="topology_policies",
+        )
+        plot_data = topology_summary[
+            topology_summary["checkpoint"].isin(selected_checkpoints)
+            & topology_summary["policy"].isin(selected_policies)
+        ].copy()
+        if plot_data.empty:
+            st.info("Sélectionner au moins un checkpoint et une politique.")
+        else:
+            plot_data["series"] = (
+                plot_data["checkpoint"] + " · " + plot_data["policy"]
+            )
+            st.markdown(f"**{metric_labels[selected_metric]} par variante**")
+            chart_data = plot_data.pivot(
+                index="variant",
+                columns="series",
+                values=selected_metric,
+            )
+            st.line_chart(chart_data)
+            if selected_metric.endswith("rate"):
+                st.caption("Valeurs affichées en proportion entre 0 et 1.")
+            if "feasible_deadline_success_rate" in plot_data:
+                st.caption(
+                    "Le nombre de tâches faisables est recalculé par variante; "
+                    "les deadlines restent celles du scénario de référence."
+                )
+            st.dataframe(
+                plot_data.sort_values(["variant", "checkpoint", "policy"]),
+                width="stretch",
+                hide_index=True,
+            )
+            st.download_button(
+                "Exporter les métriques de topologie",
+                plot_data.to_csv(index=False),
+                "topology_sensitivity_filtered.csv",
+                "text/csv",
+            )
+        with st.expander("Hypothèses des balayages"):
+            for label, config in topology_metadata.items():
+                st.markdown(f"**{label}**")
+                st.write(
+                    f"Test: {config.get('test_task_count', 'inconnu')} tâches; "
+                    f"deadline: {config.get('deadline_policy', 'inconnue')}."
+                )
+                st.write(config.get("simulator", "Simulateur non précisé."))
+                st.caption(config.get("note", ""))
 
 with coordination:
     if summary.empty:
@@ -160,10 +309,11 @@ with coordination:
                 st.bar_chart(mean["reward_proxy_latency"])
                 st.markdown("**Respect des deadlines (%)**")
                 st.bar_chart(mean["deadline_rate"] * 100)
-            st.dataframe(mean, use_container_width=True)
+            st.dataframe(mean, width="stretch")
             st.caption("Messages à réception différée au moment des décisions; "
                        "pas de contention du trafic de contrôle avec les tâches. "
-                       "Le délai de feedback n'est pas ajouté automatiquement à la durée d'une tâche.")
+                       "Le délai de feedback n'est pas ajouté automatiquement "
+                       "à la durée d'une tâche.")
 
 with explorer:
     if details.empty:
@@ -178,10 +328,10 @@ with explorer:
         subset["destination"] = subset["route"].str.split("->").str[-1]
         st.markdown("**Répartition des destinations finales**")
         st.bar_chart(subset["destination"].value_counts())
-        st.dataframe(subset, use_container_width=True, hide_index=True)
+        st.dataframe(subset, width="stretch", hide_index=True)
         st.download_button("Exporter les parcours CSV", subset.to_csv(index=False),
                            f"tasks_{sc}_{p}_{seed}.csv", "text/csv")
 
 st.divider()
-st.caption("Étudiante 2 — prototype V2. Les performances doivent être réévaluées "
-           "sur les traces et topologies de l'étudiante 1 avant le rapport final.")
+st.caption("Le tableau de bord lit les résultats sauvegardés. "
+           "L'article distingue les expériences historiques et le protocole révisé.")

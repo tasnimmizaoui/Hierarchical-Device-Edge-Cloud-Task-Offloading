@@ -4,17 +4,29 @@ from __future__ import annotations
 import numpy as np
 
 from mec_offloading.coordination.feedback import FeedbackCoordinator
-from mec_offloading.domain.actions import DeviceAction, EdgeAction, CloudSchedulingRule
+from mec_offloading.domain.actions import CloudSchedulingRule, DeviceAction, EdgeAction
 from mec_offloading.domain.models import (
-    CloudState, ComputeNodeState, DeviceState, EdgeState, NetworkLinkState,
-    QueueSummary, Task, Tier,
+    CloudState,
+    ComputeNodeState,
+    DeviceState,
+    EdgeState,
+    NetworkLinkState,
+    QueueSummary,
+    Task,
+    Tier,
 )
 from mec_offloading.rl.observations import (
-    centralized_observation, cloud_observation, device_observation, edge_observation,
+    centralized_observation,
+    cloud_observation,
+    device_observation,
+    edge_observation,
 )
 from mec_offloading.rl.policies import (
-    CentralizedDQNPolicy, CentralizedEdgeAdapter, CloudDQNPolicy,
-    DeviceDQNPolicy, EdgeDQNPolicy,
+    CentralizedDQNPolicy,
+    CentralizedEdgeAdapter,
+    CloudDQNPolicy,
+    DeviceDQNPolicy,
+    EdgeDQNPolicy,
 )
 
 
@@ -44,11 +56,11 @@ def test_observation_shapes_and_no_global_signal_leak():
     t, d, e, c, q = fixture()
     dev = device_observation(t, d, e, 1.0, None)
     edg = edge_observation(t, e, 1.0, None)
-    assert dev.shape == (10,) and edg.shape == (10,)
+    assert dev.shape == (11,) and edg.shape == (10,)
     assert dev[-2:].tolist() == [-1.0, 0.0]
     assert edg[-2:].tolist() == [-1.0, 0.0]
-    assert cloud_observation(q, c).shape == (9,)
-    assert centralized_observation(t, d, e, c, 1.0).shape == (15,)
+    assert cloud_observation(q, c).shape == (11,)
+    assert centralized_observation(t, d, e, c, 1.0).shape == (16,)
 
 
 def test_feedback_counts_only_sent_adjacent_messages():
@@ -65,9 +77,24 @@ def test_feedback_counts_only_sent_adjacent_messages():
     assert fb.cost(t.task_id).bytes_sent == 32
     assert fb.cost("test-2").messages == 0
     assert fb.cost("test-3").messages == 1
+    assert fb.cost("test-3").information_age_samples == 1
+    assert fb.cost("test-3").information_age_s == .02
     assert FeedbackCoordinator("none").observe(
         t.task_id, direction="cloud_to_edge", value=.3,
         link=e.edge_cloud_link) is None
+
+
+def test_event_threshold_is_configurable():
+    _, _, edge, _, _ = fixture()
+    feedback = FeedbackCoordinator("event", frequency=3, event_threshold=0.1)
+    feedback.observe("a", direction="edge_to_device", value=0.1,
+                     link=edge.device_edge_link, now_s=0.0)
+    feedback.observe("b", direction="edge_to_device", value=0.15,
+                     link=edge.device_edge_link, now_s=0.01)
+    assert feedback.cost("b").messages == 0
+    feedback.observe("c", direction="edge_to_device", value=0.25,
+                     link=edge.device_edge_link, now_s=0.02)
+    assert feedback.cost("c").messages == 1
 
 
 def test_three_level_agent_adapters_and_cloud_action_mapping():
@@ -82,6 +109,12 @@ def test_three_level_agent_adapters_and_cloud_action_mapping():
     assert edge.choose(t, e, c) == EdgeAction.FORWARD_TO_CLOUD
     assert cloud.choose_rule(q, c) == CloudSchedulingRule.FIFO
     cloud.record_dispatch(t.task_id)
+    assert len(cloud.log.entries) == 1
+    assert cloud.log.contested_actions == {CloudSchedulingRule.FIFO: 1}
+    single_task_queue = QueueSummary(1, .5, .5, .2, .25)
+    cloud.choose_rule(single_task_queue, c)
+    assert cloud.log.contested_actions == {CloudSchedulingRule.FIFO: 1}
+    cloud.record_dispatch("single")
     assert len(cloud.log.entries) == 1
     assert fb.cost(t.task_id).messages == 2
 
