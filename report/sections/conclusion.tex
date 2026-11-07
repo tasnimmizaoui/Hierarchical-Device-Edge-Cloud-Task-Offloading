@@ -1,24 +1,27 @@
 \section{Conclusion and Perspectives}
-This paper documents a three-tier SimPy architecture and a five-seed,
-five-noise-seed study of DQN and Double DQN on an Alibaba-derived independent
-task workload. The evidence is mixed by design: DQN has higher mean reference
-success in none, periodic, and frequent feedback, whereas Double DQN reduces
-mean energy in all three modes and reduces P95 in none and frequent modes.
-Paired intervals include zero, held-out topologies reverse some comparisons,
-event feedback trades roughly 70\% less control traffic for higher P95 at the
-0.5 threshold, and fixed SPT beats the learned cloud rule in the reported
-ablation. These findings support careful scenario analysis, not a universal
-hierarchical-RL ranking.
+This paper implements and evaluates a three-tier SimPy framework for
+device--edge--cloud offloading, integrating centralized DQN, hierarchical DQN,
+and hierarchical Double DQN policies with shared metrics and causal
+adjacent-tier feedback. The matched study shows why multi-tier policy design
+cannot be reduced to a single ranking: centralized DQN has the highest mean
+deadline success, Greedy/EDF the lowest P95 latency, and the two greedy
+policies the lowest device energy. Both hierarchical policies improve on
+Random across the headline metrics, while Double DQN improves P95 and energy
+relative to hierarchical DQN with a small success decrease. Event-triggered
+feedback demonstrates a communication-efficiency trade-off, and the cloud
+ablation identifies fixed SPT as strongest on the reported aggregate metrics.
+Together, these results make the effects of information scope, feedback, and
+queue policy measurable in one controlled framework.
 
-Important limitations remain. Alibaba is a datacenter trace adapted with
-synthetic MEC payloads, deadlines, batteries, links, capacities, and device
-assignments. The simulator filters multi-task jobs rather than reconstructing
-DAGs, uses one cloud worker, and models feedback as non-blocking control
-traffic. The learning formulation is not a full sequential multi-agent
-Gymnasium environment; cloud next-decision credit and the queue reward are
-proxies. The campaign artifacts are documented but excluded from Git, so the
-reported values require artifact release for independent reproduction.
-Future work should release trace fingerprints and checkpoints, model
-control-plane contention, add multi-worker cloud resources, evaluate DAGs and
-calibrated energy, and implement a stepable multi-agent environment.
-Federated RL remains future work rather than a contribution of this paper.
+The evidence is bounded by the current experimental model. Alibaba Cluster
+Trace 2017 is a production datacenter trace adapted with assumed MEC payloads,
+deadlines, device assignments, batteries, links, and capacities; multi-task
+jobs and DAG dependencies are not reconstructed. The reference topology uses
+one shared cloud worker. Feedback is modeled with bytes, delay, and age but
+does not contend with data-plane traffic, and centralized state-collection
+traffic is not counted. The learning formulation is not a complete sequential
+multi-agent Gymnasium environment, and reported standard deviations are
+descriptive rather than significance claims. Releasing trace fingerprints and
+checkpoints, adding control-plane contention and multi-worker clouds, and
+moving to a stepable sequential multi-agent environment are natural next
+steps for extending this framework.

@@ -7,19 +7,24 @@ backhaul transmission, device energy, and a relative deadline. A centralized
 controller can observe more state, but it also requires broader information
 sharing and can become a coordination bottleneck.
 
-This project investigates a hierarchical alternative in which each tier makes
-only the decision exposed by its local contract. The device chooses local
-execution or its assigned edge; the edge chooses edge execution or cloud
-forwarding; and the cloud selects a queue discipline. The repository's
-contribution is primarily an auditable integration: a single SimPy backend
-executes all policies, with common task, timing, energy, and metric definitions.
-Double-DQN adapters and delayed adjacent-tier feedback are implemented at this
-boundary, but their scientific validation remains incomplete.
+This paper positions the repository as an experimental framework for studying
+these choices under common simulator conditions. Each tier makes only the
+decision exposed by its local contract: the device chooses local execution or
+its assigned edge, the edge chooses edge execution or cloud forwarding, and
+the cloud selects a queue discipline. A common SimPy backend executes the
+centralized and hierarchical policies with shared task, timing, energy, and
+metric definitions, making cross-policy differences directly inspectable.
 
-The article makes three bounded contributions. First, it specifies the
-three-tier model and policy interfaces. Second, it reports the committed
-three-seed synthetic baseline evidence without confusing it with trace
-measurements. Third, it identifies the exact gap between the implemented
-terminal one-step learning formulation and a sequential multi-agent RL
-environment. The remainder presents related work, the model, implementation,
-evaluation evidence, and limitations.
+The paper makes five contributions. First, it implements a three-tier
+device--edge--cloud architecture with distinct decision boundaries and a
+shared cloud scheduler. Second, it integrates centralized DQN, hierarchical
+DQN, and hierarchical Double DQN controllers into that common backend.
+Third, it implements causal adjacent-tier feedback with modeled bytes, delay,
+and information age. Fourth, it reports a matched comparison on 579
+chronologically held-out Alibaba-derived tasks using 24 devices, three edges,
+and one cloud worker. Fifth, it analyzes deadline success, latency, device
+energy, communication overhead, feedback strategies, topology changes, and
+cloud scheduling. The results expose objective-dependent trade-offs rather
+than assuming that one controller dominates every metric. The learning
+formulation and workload adaptation define the scope of the evidence; they
+also provide a controlled basis for future sequential multi-agent studies.

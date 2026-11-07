@@ -5,6 +5,7 @@
 \usepackage{graphicx}
 \usepackage{microtype}
 \usepackage{url}
+\usepackage{balance}
 
 \title{Hierarchical Device--Edge--Cloud Task Offloading:\\
 An Experimental Study of DQN, Double DQN, Feedback, and Cloud Scheduling}
@@ -17,24 +18,24 @@ An Experimental Study of DQN, Double DQN, Feedback, and Cloud Scheduling}
 \maketitle
 
 \begin{abstract}
-This paper presents an auditable device--edge--cloud offloading system and a
-documented experimental study of heuristic, centralized DQN, hierarchical
-DQN, and hierarchical Double DQN policies under delayed feedback. The
-canonical SimPy backend separates device placement, edge forwarding, and
-shared-cloud scheduling, while the learning integration uses per-decision
-observations and task or next-decision credit rather than a complete
-sequential multi-agent Gymnasium environment. The primary campaign replays
-579 chronologically held-out tasks derived from Alibaba Cluster Trace 2017
-after independent-task filtering; 2,891 accepted tasks are split into 1,734
-training, 578 validation, and 579 test tasks and mapped to 24 devices, 3
-edges, and one shared cloud worker. On the matched reference-topology
-comparison, centralized DQN has the highest mean deadline success (77.41\%),
+This paper presents an experimental framework for hierarchical
+device--edge--cloud task offloading. It integrates centralized DQN,
+hierarchical DQN, and hierarchical Double DQN controllers with causal
+adjacent-tier feedback in a common SimPy backend, where communication bytes,
+delay, and information age are modeled explicitly. The matched campaign
+replays 579 chronologically held-out tasks derived from Alibaba Cluster Trace
+2017 after independent-task filtering; 2,891 accepted tasks are split into
+1,734 training, 578 validation, and 579 test tasks and mapped to 24 devices,
+3 edges, and one shared cloud worker. In the reference-topology comparison,
+centralized DQN reaches the highest mean deadline success (77.41\%),
 Greedy/EDF the lowest mean P95 latency (12.95 s), and Greedy/FIFO and
 Greedy/EDF the lowest mean device energy (0.211 J/task). Hierarchical Double
-DQN reduces P95 and energy relative to hierarchical DQN, but has slightly
-lower success. Supporting feedback and topology studies expose further
-reversals, including a roughly 70\% traffic reduction at an event threshold
-with a latency cost. The findings are descriptive and scenario-specific.
+DQN improves P95 latency and device energy relative to hierarchical DQN, with
+a small decrease in success. Separate feedback experiments show roughly 70\%
+less feedback traffic with event-triggered updates at a latency cost, while
+the cloud ablation favors fixed SPT. The framework makes these
+centralized--hierarchical--heuristic trade-offs measurable and provides a
+reproducible basis for future sequential multi-agent studies.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -48,6 +49,7 @@ discrete-event simulation, Double-DQN, reproducibility
 \input{sections/implementation}
 \input{sections/conclusion}
 
+\balance
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 \end{document}

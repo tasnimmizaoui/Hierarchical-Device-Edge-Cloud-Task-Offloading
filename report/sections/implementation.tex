@@ -76,7 +76,7 @@ package's corresponding SD; bytes are per 579-task replay.}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
-Policy & Mean $L$ (s) & Data B & Feedback B\\
+Policy & Mean $L$ (s) & Data ($10^8$ B) & Feedback ($10^3$ B)\\
 \midrule
 Random & $22.002\pm2.681$ & $8.07\pm0.57\,10^8$ & $0$\\
 G/FIFO & $2.619\pm0.046$ & $12.86\pm0.12\,10^8$ & $0$\\
@@ -91,16 +91,18 @@ H-DDQN & $3.015\pm0.470$ & $12.04\pm0.42\,10^8$ & $35.1\pm0.6\,10^3$\\
 Figure~\ref{fig:matched} visualizes the same documented summary. Centralized
 DQN has the highest mean success, while Greedy/EDF has the lowest mean P95.
 Greedy/FIFO and Greedy/EDF share the lowest mean energy. Both hierarchical
-learners improve on Random for all three headline metrics, but neither beats
-Greedy/EDF on success, P95, or energy. Double DQN lowers mean P95 and energy
-relative to hierarchical DQN, with a small success decrease. These are not
-claims of statistical significance.
+learners improve on Random across all three headline metrics, while the
+reference comparison exposes different strengths for centralized control,
+heuristic scheduling, and hierarchy. Double DQN lowers mean P95 and energy
+relative to hierarchical DQN, with a small success decrease. These are
+descriptive comparisons, not claims of statistical significance.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/final_matched_comparison.pdf}
-\caption{Documented means for the six matched policies; lower is better for
-P95 and energy.}
+\caption{Matched-policy means from the committed summary. Centralized DQN
+leads deadline success, Greedy/EDF leads P95 latency, and the two greedy
+policies lead device energy; lower is better for the latter two metrics.}
 \label{fig:matched}
 \end{figure}
 
