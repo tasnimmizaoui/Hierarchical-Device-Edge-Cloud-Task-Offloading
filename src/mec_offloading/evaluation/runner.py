@@ -37,12 +37,16 @@ METRIC_KEYS = (
     "deadline_success_rate",
     "deadline_miss_rate",
     "mean_device_energy_j",
+    "mean_queue_wait_s",
+    "queue_wait_over_1s_fraction",
     "throughput_tasks_per_s",
     "mean_communication_delay_s",
     "communication_bytes",
     "feedback_messages",
     "feedback_bytes",
     "mean_feedback_modeled_delay_s",
+    "mean_feedback_age_s",
+    "feedback_age_samples",
 )
 
 
@@ -83,6 +87,13 @@ def aggregate_results(
         "mean_device_energy_j": (
             mean(result.device_energy_j for result in completed) if completed else 0.0
         ),
+        "mean_queue_wait_s": (
+            mean(result.queue_wait_s for result in results) if results else 0.0
+        ),
+        "queue_wait_over_1s_fraction": (
+            sum(result.queue_wait_s > 1.0 for result in results) / len(results)
+            if results else 0.0
+        ),
         "throughput_tasks_per_s": len(completed) / completion_time if completion_time > 0 else 0.0,
         "mean_communication_delay_s": (
             mean(result.communication_delay_s for result in results) if results else 0.0
@@ -93,11 +104,23 @@ def aggregate_results(
         "mean_feedback_modeled_delay_s": (
             mean(result.feedback_modeled_delay_s for result in results) if results else 0.0
         ),
+        "mean_feedback_age_s": (
+            sum(result.feedback_age_s for result in results)
+            / sum(result.feedback_age_samples for result in results)
+            if sum(result.feedback_age_samples for result in results) else 0.0
+        ),
+        "feedback_age_samples": sum(
+            result.feedback_age_samples for result in results
+        ),
     }
     return row
 
 
-def summarize_runs(rows: list[dict[str, float | int | str]]) -> list[dict[str, float | int | str]]:
+def summarize_runs(
+    rows: list[dict[str, float | int | str]],
+    *,
+    extra_metric_keys: tuple[str, ...] = (),
+) -> list[dict[str, float | int | str]]:
     """Calculate across-seed mean and sample standard deviation per policy."""
     by_policy: dict[str, list[dict[str, float | int | str]]] = {}
     for row in rows:
@@ -109,7 +132,7 @@ def summarize_runs(rows: list[dict[str, float | int | str]]) -> list[dict[str, f
             "policy": policy,
             "seed_count": len(policy_rows),
         }
-        for key in METRIC_KEYS:
+        for key in (*METRIC_KEYS, *extra_metric_keys):
             values = [float(row[key]) for row in policy_rows]
             summary[f"{key}_mean"] = mean(values)
             summary[f"{key}_std"] = stdev(values) if len(values) > 1 else 0.0
@@ -159,6 +182,7 @@ def run_baselines(
                     "completion_time_s": result.completion_time_s,
                     "execution_start_time_s": result.execution_start_time_s,
                     "end_to_end_latency_s": result.end_to_end_latency_s,
+                    "queue_wait_s": result.queue_wait_s,
                     "deadline_met": result.deadline_met,
                     "device_energy_j": result.device_energy_j,
                     "communication_delay_s": result.communication_delay_s,
@@ -166,6 +190,8 @@ def run_baselines(
                     "feedback_messages": result.feedback_messages,
                     "feedback_bytes": result.feedback_bytes,
                     "feedback_modeled_delay_s": result.feedback_modeled_delay_s,
+                    "feedback_age_s": result.feedback_age_s,
+                    "feedback_age_samples": result.feedback_age_samples,
                     "failure_reason": result.failure_reason or "",
                 }
                 for result in results

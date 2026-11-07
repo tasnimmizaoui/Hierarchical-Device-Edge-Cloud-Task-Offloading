@@ -8,12 +8,14 @@ so missing MEC fields are explicit configuration assumptions.
 from __future__ import annotations
 
 import csv
+import hashlib
 import math
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
+from statistics import NormalDist
 
 from mec_offloading.domain.models import Task
 
@@ -31,6 +33,9 @@ _ALIBABA_2017_BATCH_TASK_FIELDS = (
     "plan_cpu",
     "plan_mem",
 )
+ALIBABA_2017_ADAPTER_VERSION = (
+    "alibaba2017-mean-completed-instance-lognormal-payload-v2"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +43,7 @@ class TraceWorkloadConfig:
     """Explicit assumptions used to complete the shared :class:`Task` contract."""
 
     reference_mips_per_core: float = 1_000.0
-    input_size_mb: float = 1.0
+    input_size_mb: float | None = None
     result_size_mb: float = 0.1
     deadline_s: float = 5.0
     device_ids: tuple[str, ...] = ("device-1",)
@@ -49,7 +54,9 @@ class TraceWorkloadConfig:
     def __post_init__(self) -> None:
         if self.reference_mips_per_core <= 0:
             raise ValueError("reference_mips_per_core must be > 0")
-        if self.input_size_mb < 0 or self.result_size_mb < 0:
+        if (
+            self.input_size_mb is not None and self.input_size_mb < 0
+        ) or self.result_size_mb < 0:
             raise ValueError("payload sizes must be >= 0")
         if self.deadline_s <= 0:
             raise ValueError("deadline_s must be > 0")
@@ -57,6 +64,32 @@ class TraceWorkloadConfig:
             raise ValueError("device_ids must contain at least one non-empty ID")
         if self.max_tasks is not None and self.max_tasks <= 0:
             raise ValueError("max_tasks must be > 0 when provided")
+
+
+def payload_mb(
+    task_id: str, median: float = 1.0, sigma: float = 1.0, cap: float = 50.0
+) -> float:
+    """Return a stable, task-specific lognormal payload size in decimal MB."""
+    if (
+        not task_id
+        or not all(math.isfinite(value) for value in (median, sigma, cap))
+        or median <= 0
+        or sigma < 0
+        or cap <= 0
+    ):
+        raise ValueError("task_id, median, and cap must be positive; sigma must be >= 0")
+    uniform = int(hashlib.sha256(task_id.encode("utf-8")).hexdigest()[:8], 16) / 0xFFFFFFFF
+    quantile = min(max(uniform, 1e-6), 1.0 - 1e-6)
+    normal = NormalDist().inv_cdf(quantile)
+    return min(cap, median * math.exp(sigma * normal))
+
+
+def _input_size_mb(task_id: str, config: TraceWorkloadConfig) -> float:
+    return (
+        config.input_size_mb
+        if config.input_size_mb is not None
+        else payload_mb(task_id)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +191,7 @@ def _task_from_instance(
         task_id=task_id,
         device_id=config.device_ids[index % len(config.device_ids)],
         arrival_time_s=start_time - trace_start_s,
-        input_size_mb=config.input_size_mb,
+        input_size_mb=_input_size_mb(task_id, config),
         required_mi=required_mi,
         result_size_mb=config.result_size_mb,
         deadline_s=config.deadline_s,
@@ -260,7 +293,7 @@ def load_alibaba_2017_batch_tasks(
     seen_ids: set[str] = set()
     origin = trace_start_s
 
-    instance_usage: dict[tuple[str, str], float] = {}
+    instance_usage: dict[tuple[str, str], tuple[float, int]] = {}
     with Path(instance_path).open(newline="", encoding="utf-8") as handle:
         for row_number, values in enumerate(csv.reader(handle), start=1):
             if not values or not any(value.strip() for value in values):
@@ -300,16 +333,16 @@ def load_alibaba_2017_batch_tasks(
                 )
                 continue
             key = (instance_job_id.strip(), instance_task_id.strip())
-            instance_usage[key] = instance_usage.get(key, 0.0) + (
-                (end - start) * cpu * config.reference_mips_per_core
+            work_mi, instance_count = instance_usage.get(key, (0.0, 0))
+            instance_usage[key] = (
+                work_mi + (end - start) * cpu * config.reference_mips_per_core,
+                instance_count + 1,
             )
 
     stopped_early = False
     for row_number, row in rows:
         if config.max_tasks is not None and len(tasks) >= config.max_tasks:
             stopped_early = True
-            break
-        if config.max_tasks is not None and len(tasks) >= config.max_tasks:
             break
         try:
             job_id = row["job_id"].strip()
@@ -328,14 +361,15 @@ def load_alibaba_2017_batch_tasks(
             if task_id in seen_ids:
                 raise ValueError("duplicate task identifier")
             key = (job_id, row["task_id"].strip())
-            required_mi = instance_usage.get(key, 0.0)
-            if required_mi <= 0:
+            total_instance_mi, instance_count = instance_usage.get(key, (0.0, 0))
+            if instance_count == 0 or total_instance_mi <= 0:
                 raise ValueError("no valid completed instances")
+            required_mi = total_instance_mi / instance_count
             task = Task(
                 task_id=task_id,
                 device_id=config.device_ids[len(tasks) % len(config.device_ids)],
                 arrival_time_s=create_time - origin,
-                input_size_mb=config.input_size_mb,
+                input_size_mb=_input_size_mb(task_id, config),
                 required_mi=required_mi,
                 result_size_mb=config.result_size_mb,
                 deadline_s=config.deadline_s,

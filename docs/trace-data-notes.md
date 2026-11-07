@@ -39,12 +39,18 @@ The 2017 files are headerless. `batch_task.csv` fields are
 relative to the trace start. The adapter accepts completed/terminated records,
 rejects invalid or incomplete records, and reports rejection counts.
 
-Derived compute demand is:
+Derived compute demand is estimated as:
 
-`sum((instance_end - instance_start) × real_cpu_avg × reference_mips_per_core)`
+`mean((instance_end - instance_start) × real_cpu_avg × reference_mips_per_core)`
 
-over valid terminated instances for the task. `real_cpu_avg` is documented as
-an actual CPU number, not a fraction. The MIPS-per-core conversion is a
+over valid completed instances for the task. `instance_num` describes parallel
+instances in a stage; summing their work and scheduling that result as one
+serial task substantially overstates the modeled task demand. The adapter
+therefore treats each accepted task as one representative instance. This
+changes the workload semantics and is versioned as
+`alibaba2017-mean-completed-instance-lognormal-payload-v2`; checkpoints made
+with earlier task/payload adapters must not be reused. `real_cpu_avg` is documented as an
+actual CPU number, not a fraction. The MIPS-per-core conversion is a
 configurable simulation estimate, not an Alibaba measurement.
 
 ## Provenance table
@@ -52,8 +58,8 @@ configurable simulation estimate, not an Alibaba measurement.
 | Target field | Trace source column | Direct or derived? | Mapping / unit | Missing-data policy |
 |---|---|---|---|---|
 | `arrival_time_s` | 2017 `batch_task.create_timestamp` | Derived | subtract trace origin, seconds | reject missing/invalid |
-| `required_mi` | 2017 `batch_instance.start_timestamp`, `end_timestamp`, `real_cpu_avg` | Derived estimate | sum runtime × actual CPU × configurable MIPS/core, MI | reject invalid/incomplete instances |
-| `input_size_mb` | None | Synthetic | configured decimal MB | configuration default |
+| `required_mi` | 2017 `batch_instance.start_timestamp`, `end_timestamp`, `real_cpu_avg` | Derived estimate | mean completed-instance runtime × actual CPU × configurable MIPS/core, MI | reject task if no valid completed instances |
+| `input_size_mb` | None | Synthetic | deterministic lognormal; median 1 MB, sigma 1, capped at 50 MB | SHA-256 of task ID |
 | `result_size_mb` | None | Synthetic | configured decimal MB | configuration default |
 | `deadline_s` | None | Synthetic | configured relative seconds | configuration default |
 | `device_id` | None | Synthetic assignment | deterministic round-robin configured IDs | configuration default |
@@ -68,8 +74,9 @@ terms from the link in `README2017.md`:
 http://aliopentrace.oss-cn-beijing.aliyuncs.com/v2017Traces/alibaba-trace-2017.tar.gz
 ```
 
-Verify it with the repository's official `SHA256SUM`, extract only the needed
-files, and place a manageable filtered sample in `data/raw/`:
+Verify it with the repository's official `SHA256SUM` and extract the needed
+files into `data/raw/`. The command below **audits and reports** a local CSV; it
+does not write a filtered CSV or a processed cache:
 
 ```bash
 python scripts/prepare_trace_sample.py data/raw/batch_task.csv \
@@ -82,15 +89,56 @@ The audit command reports `selected`, `task_rejected`, and
 `instance_records_rejected` separately. With `--max-tasks 20`, it stops after
 20 usable tasks and reports `stopped_early=True`; rejection counts then cover
 records examined before that limit, not the entire source file. Without a
-limit, the current real sample produced 381 selected tasks, 80,172 rejected
-task rows, and 46,536 rejected/incomplete auxiliary instance records. The
-largest task rejection category was 77,487 multi-task jobs; these are excluded
-because the independent-task simulator does not reconstruct their DAGs.
+limit, the local CSVs audited on 2026-11-06 produced 2,891 selected tasks,
+77,662 rejected task rows, and 147,849 rejected/incomplete auxiliary instance
+records. The largest task rejection category was 77,487 multi-task jobs; these
+are excluded because the independent-task simulator does not reconstruct their
+DAGs. Counts are tied to the exact local CSVs and loader version; rerun the
+audit after replacing either file.
 
 For unit tests, use `pytest -q tests/test_trace_workloads.py`. The adapter
 returns the same `Task` objects as `generate_synthetic_tasks()`. Chronological
-splits are available with `split_trace_tasks()` and do not overlap. The
-`--format 2018-instance` option remains only for the legacy 2018 adapter.
+splits are available with `split_trace_tasks()` and do not overlap. The RL
+training and comparison scripts call this adapter directly; they re-read and
+re-parse the raw CSVs on each run and do not currently write a cached canonical
+dataset. Their `--max-trace-tasks` option limits accepted tasks retained, not
+the number of source rows scanned: task/instance joins and source-file
+fingerprints require reading the source files. For the current local audit,
+use a limit above 2,891 to retain all accepted tasks. The `--format
+2018-instance` option remains only for the legacy 2018 adapter.
+
+The integrated RL scripts perform this loader/mapping step automatically when
+invoked with `--source alibaba2017`. They parse the raw pair into canonical
+`Task` objects in memory; no separate preprocessing command is required before
+training. The current defaults (lognormal input, 0.1 MB output, 5-second
+relative deadline, 1,000 reference MIPS, round-robin device assignment) are
+assumptions supplied by `TraceWorkloadConfig`, not Alibaba measurements.
+
+The 5-second default is intentionally preserved as a strict scenario, but it
+is not calibrated to the observed compute demand. For an alternative
+compute-relative scenario, the RL scripts accept
+`--deadline-policy local-relative-2x`: each task's deadline is set to twice its
+isolated execution time on its assigned device
+(`2 × required_mi / device_cpu_mips`). This is a declared simulation SLA
+assumption, not a deadline observed in Alibaba. Train and evaluate matching
+checkpoints under each policy; do not compare a model trained with one
+deadline basis against another. Report both cases because fixed 5 seconds
+shows strict-SLA behavior while the relative case tests routing/queueing
+decisions without making most trace tasks impossible by construction.
+
+The optional `best-tier-calibrated` policy sets each deadline to
+`max(1 second, 0.9 × required_mi / fastest_configured_MIPS + 0.5 seconds)`.
+The multiplier was selected using the chronological training split only; with
+the current accepted trace and topology it yields about 73% no-queue-feasible
+training tasks. The suggested 3x multiplier was not used because the measured
+no-queue feasibility was 100%, which removes infeasible tasks from the
+comparison. This remains a synthetic SLA assumption, and the chronological
+validation/test feasibility rates differ because the trace is not stationary.
+
+The representative-instance work remains heavy-tailed. Recalculate
+assigned-device service-time percentiles whenever the topology's device
+assignment or CPU capacities change; the earlier p50/p95/p99 figures were
+measured on a different topology.
 
 **Important:** Alibaba Cluster Trace is an infrastructure workload trace, not a
 complete MEC device dataset. Device assignment, battery, payload sizes,
@@ -99,7 +147,13 @@ assumptions and must be reported as such.
 
 ## Multi-device topology integration
 
-Run the accepted 2017 tasks through the configured three-device topology:
+The contended RL regime compresses arrivals with `k=0.136067` and enables
+seeded ±10% bandwidth and service-time variation. `scripts/calibrate_contention.py`
+recomputes the offered load and baseline response from the local chronological
+test split; the factor was selected to target 0.75 aggregate edge load against
+12,500 MIPS.
+
+Run the accepted 2017 tasks through the configured 24-device/three-edge topology:
 
 ```bash
 python scripts/run_trace_workload.py \
@@ -109,13 +163,14 @@ python scripts/run_trace_workload.py \
   --topology-config configs/alibaba-multi-topology.yaml
 ```
 
-Accepted tasks are assigned deterministically in selection order:
+Accepted tasks are assigned deterministically in selection order and mapped
+round-robin over three edges:
 
 ```text
 task 0 -> device-1 -> edge-1
-task 1 -> device-2 -> edge-1
-task 2 -> device-3 -> edge-2
-task 3 -> device-1 -> edge-1
+task 1 -> device-2 -> edge-2
+task 2 -> device-3 -> edge-3
+task 3 -> device-4 -> edge-1
 ...
 ```
 

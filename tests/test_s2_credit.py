@@ -65,6 +65,42 @@ def test_missed_deadline_reduces_reward_and_normalization_checked():
         team_reward(tasks[0], results[0], RewardWeights(energy_reference_j=0))
 
 
+def test_energy_reference_makes_015_j_cost_half_an_energy_unit():
+    tasks, results = outcomes()
+    zero_energy = team_reward(tasks[0], replace(results[0], device_energy_j=0.0))
+    offload_energy = team_reward(
+        tasks[0], replace(results[0], device_energy_j=0.15)
+    )
+    assert zero_energy - offload_energy == pytest.approx(0.125)
+
+
+def test_next_decision_credit_bootstraps_from_same_agent_sequence():
+    tasks, results = outcomes()
+    log = DecisionLog()
+    log.add("t-0", np.array([1, 2], dtype=np.float32), 0)
+    log.add("t-2", np.array([3, 4], dtype=np.float32), 1)
+    agent = RecordingAgent()
+
+    update_dqn_from_episode(
+        agent, log, tasks, results, credit_mode="next-decision"
+    )
+
+    first, last = agent.transitions
+    assert first.done is False
+    assert first.next_state.tolist() == [3, 4]
+    assert last.done is True
+    assert np.array_equal(last.next_state, np.zeros(2))
+
+
+def test_log_latency_reward_keeps_distinguishing_heavy_tail_misses():
+    tasks, results = outcomes()
+    task = tasks[0]
+    fast = team_reward(task, replace(results[0], end_to_end_latency_s=10.0))
+    slow = team_reward(task, replace(results[0], end_to_end_latency_s=1_000.0))
+    extreme = team_reward(task, replace(results[0], end_to_end_latency_s=100_000.0))
+    assert fast > slow > extreme
+
+
 def test_double_dqn_replay_terminal_shapes_and_loss(tmp_path):
     agent = DQNAgent(3, 2, seed=1, batch_size=2, target_interval=1)
     for action in (0, 1, 0):
@@ -79,5 +115,16 @@ def test_double_dqn_replay_terminal_shapes_and_loss(tmp_path):
     agent.save(path)
     loaded = DQNAgent.load(path)
     assert loaded.act(np.zeros(3, dtype=np.float32)) in (0, 1)
+    assert loaded.algorithm == "double-dqn"
     with pytest.raises(ValueError, match="observation shape"):
         agent.observe(Transition(np.zeros(2), 0, 0.0, np.zeros(2), True))
+
+
+def test_vanilla_dqn_is_an_explicit_trainable_checkpointed_ablation(tmp_path):
+    observation = np.asarray([.1, .2], dtype=np.float32)
+    agent = DQNAgent(2, 2, seed=3, batch_size=1, algorithm="dqn")
+    agent.observe(Transition(observation, 0, -0.5, observation, False))
+    assert agent.learn_steps == 1
+    path = tmp_path / "vanilla-dqn.pt"
+    agent.save(path)
+    assert DQNAgent.load(path).algorithm == "dqn"
