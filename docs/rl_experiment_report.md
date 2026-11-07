@@ -1,373 +1,159 @@
-# Robustness of Hierarchical Double-DQN Task Offloading
+# Hierarchical task offloading with DQN and Double DQN
 
-## Abstract
+## Results available
 
-**Version status:** the v8/v9 policy percentages below are historical and are
-not comparable with the revised contention regime. A newer five-training-seed
-feedback ablation is being run with the revised 24-device, three-edge protocol.
-Its partial outputs are not pooled or presented as final findings here. See
-Section 11 for its design, output locations, and completion criteria.
+The evaluation replays 579 chronologically held-out Alibaba tasks on
+the same 24-device, three-edge and shared-cloud configuration.
+Both algorithms use next-decision credit. DQN takes the maximum value
+from the target network. Double DQN selects the next action with the
+online network and evaluates it with the target network. The target
+differs only for transitions that bootstrap. The two learners use the
+same episode cap and validation rule. Early stopping can result in
+different numbers of episodes.
 
-This report documents the Student 2 reinforcement-learning integration and the
-experiments used to improve its workload and topology realism. The original
-Alibaba 2017 adapter treated all instances in a parallel stage as one serial
-task, producing implausibly large modeled jobs; the initial MEC configuration
-also lacked a convincing device–edge–cloud capacity hierarchy. The current
-experiment versions task demand as the mean completed-instance work. The
-historical v8/v9 results used a three-device/two-edge/shared-cloud topology
-and an explicit feasibility-aware reward, and compared a reference-trained model (v8) with a
-model trained across 13 topology variants (robust v9).
+All 30 Double DQN conditions are complete. The DQN results below cover
+five matched seeds per mode for no, periodic and frequent feedback.
+The DQN event campaign is reported separately until each threshold
+has five evaluated checkpoints.
 
-On the 579-task chronological test split in the reference topology, robust v9
-reaches 85.7% raw deadline success, compared with 85.3% for v8 and 86.0% for
-Greedy EDF. Its largest observed improvement is under the deliberately slow
-device–edge link: hierarchical periodic success rises from 0% to 36.6%; among
-tasks feasible without queues in that variant, success is 98.6%. Performance is
-not uniformly better: v9 falls from 76.7% to 75.0% in the combined-stress
-case. These are deterministic simulator results on one trace split and one
-test seed. The topology variants are the same family used in training, so this
-is evidence of robustness to those known perturbations—not validation on
-unseen real deployments. In the reference topology, the learned hierarchical
-policy still does not beat Greedy EDF.
-
-## 1. Research questions
-
-1. Does replacing the erroneous parallel-stage-as-serial-task interpretation
-   produce a workload that can meaningfully test routing policies?
-2. How does hierarchical Double-DQN compare with centralized DQN and
-   non-learning policies on the corrected reference workload?
-3. Does exposing the learner to varied CPU, network, and mapping conditions
-   reduce sensitivity to topology changes?
-4. What do the results establish, and what remains unsupported by the
-   simulator and experiment design?
-
-## 2. System and policy architecture
-
-The simulator processes tasks through a Device → Edge → Cloud hierarchy.
-At each device, the device policy chooses local execution or offload to its
-associated edge. An edge policy chooses edge execution or forwarding to Cloud.
-Reported checkpoints use a fixed EDF cloud scheduler; a learned cloud policy
-was not used for these results. The centralized DQN is a full-state,
-three-action reference rather than a deployable hierarchy.
-
-![Integrated policy and learning architecture](figures/rl_architecture.png)
-
-Each DQN uses an independent MLP with two 64-unit ReLU hidden layers. The
-device network maps 11 normalized features to two Q-values; the edge network
-maps 10 features to two Q-values; an optional cloud network maps 11 queue
-features to three scheduling-rule Q-values; and the centralized network maps
-16 full-state features to three Q-values. Features include normalized task work,
-deadline/service estimates, queue and CPU state, route/link characteristics,
-and delayed feedback state. The cloud has EDF in the historical reported
-configuration.
-The feature schema is versioned as `simpy-v9-cloud-queue-signals`; older
-surrogate-model checkpoints are not interchangeable with it.
-
-The learner is Double-DQN with an online and target network, replay capacity
-8,000, batch size 32, learning rate `3e-4`, target update every 500 learning
-steps, discount `0.94`, and epsilon decaying linearly from `0.90` to `0.05`
-by 75% of the episode budget. Optimization uses Smooth L1 loss and gradient
-clipping. Terminal credit is the default; `next-decision` optionally bootstraps
-from the same agent's following logged decision with a positive discount. This
-remains an episodic simulator integration rather than a Gymnasium environment,
-and does not backpropagate through the simulator.
-
-The cloud observation now includes queue length, deadline slack, estimated
-workload imbalance, and the number of jobs whose slack is no greater than
-their estimated cloud service time. Singleton queues are omitted from replay.
-SPT ranks jobs by `estimated_work_mi`; for the Alibaba 2017 adapter this is the
-documented mean completed-instance work estimate.
-For contested cloud dispatches, the learner receives a negative normalized
-cost for the total queue waiting incurred during the selected job's estimated
-service time. This reward is separate from the shared per-task reward used by
-the other tiers. The shared feedback-byte reward remains mode-dependent unless
-its configured weight is zero.
-
-## 3. Workload, topology, and reward
-
-### 3.1 Alibaba task semantics
-
-The workload is built from Alibaba Cluster Trace 2017 `batch_task.csv` and
-`batch_instance.csv`. Of 80,553 examined task rows, 2,891 were retained and
-77,662 rejected; 147,849 incomplete or rejected instance records were also
-reported. The retained set is split chronologically into 1,734 training, 578
-validation, and 579 test tasks.
-
-The task demand is now
-`mean((instance_end - instance_start) × real_cpu_avg × reference_mips_per_core)`
-over valid completed instances. `instance_num` is the parallel instance
-count—not a task-size field—so summing all instance work and then scheduling
-that sum as one serial job overstated demand. The adapter version is
-`alibaba2017-mean-completed-instance-lognormal-payload-v2`; checkpoints
-trained against an earlier payload/task adapter must not be reused.
-
-This remains a transformed infrastructure trace, not a complete MEC dataset.
-Arrival times and derived work are trace-based. The 2017 adapter now assigns a
-reproducible task-specific lognormal input payload (median 1 MB, sigma 1,
-capped at 50 MB); the 0.1 MB output, 1,000 reference MIPS/core, device
-assignments, deadlines, battery/radio state, and MEC capacities remain
-simulation assumptions. The payload change increments the adapter version;
-previous checkpoints must be retrained.
-
-### 3.2 Reference MEC topology and deadline
-
-The revised trace configuration has 24 devices (800/1,000/1,200 MIPS
-repeated), three edges (5,000/6,250/7,500 MIPS), and one 20,000-MIPS cloud
-worker. Device–edge and edge–cloud bandwidths are 100 and 1,000 Mbps,
-respectively. Devices are mapped round-robin across the three edges. Historical
-v8/v9 runs used `k=0.136067`, calibrated against their former test window;
-those results are not a leakage-free estimate and are not the current protocol.
-The revised trainer calibrates compression on all 578 chronological validation
-tasks to offered load 0.75 against 12,500 MIPS, then evaluates once on the
-separate chronological test split. The topology also enables seeded ±10%
-bandwidth jitter and service-time noise.
-
-Deadlines use the synthetic `best-tier-calibrated` rule:
-
-`deadline = max(1 second, 0.9 × required_MI / fastest_configured_MIPS + 0.5 seconds)`.
-
-The factor was selected on training data; it is not an SLA from Alibaba.
-Feasibility must be recalculated for each
-compressed workload and topology; the previous v8/v9 counts do not apply to
-the revised payloads/topology. A separate feasibility-aware success rate is
-reported alongside raw success.
-Under a topology variant, deadlines stay fixed at the reference-derived values
-and route feasibility is recomputed for the changed topology.
-
-### 3.3 Reward and interpretation
-
-The shared terminal reward is negative normalized cost:
-
-`R = −(0.35 × latency_fraction + 0.25 × energy_fraction + 0.35 × feasible_miss + 0.05 × communication_fraction)`.
-
-Latency is a clipped logarithmic end-to-end-latency/deadline term; device
-energy is normalized by 0.3 J and capped; coordination is normalized by 64
-feedback bytes and capped. Thus a 0.15 J offload contributes 0.5 to the
-normalized energy fraction. The deadline-miss term applies only when at least
-one route could meet the deadline with empty queues. A negative reward is
-expected; higher (less negative) is better.
-
-## 4. Revised contention calibration
-
-The deterministic workload calibration used seed 42, the full chronological
-test split (579 tasks), heterogeneous payloads, and seeded simulator noise.
-`scripts/calibrate_contention.py` sweeps the requested compression factors and
-adds the interpolated factor that targets offered load 0.75. At `k=0.136067`,
-the oracle-state Greedy EDF reaches the requested 70–85% raw success band.
-The offered-load index uses the requested 12,500-MIPS denominator; the three
-configured edge CPUs sum to 18,750 MIPS, so the denominator is a reference
-capacity rather than the topology's full aggregate CPU capacity.
-`greedy_delayed` is the information-matched baseline: it receives only the
-same causal delayed queue signals as hierarchical device/edge agents and does
-not read exact edge/cloud queue state. `always_edge` is included as a load
-stress control.
-
-| Policy | Raw deadline success | Tasks with queue wait >1 s | Mean device energy (J) | Data bytes | Feedback bytes |
-|---|---:|---:|---:|---:|---:|
-| always_edge | 31.4% | 58.2% | 0.233 | 1,058,807,112 | 0 |
-| greedy_oracle_edf | 75.6% | 12.3% | 0.211 | 1,299,097,675 | 0 |
-| greedy_delayed | 67.7% | 18.7% | 0.258 | 1,171,958,482 | 7,328 |
-
-These are calibration baselines only. The LaTeX report presents the revised
-held-out policy comparisons separately. The
-measured CSV is
-`results/contention-calibration/contention_calibration.csv`.
-
-The training sweep samples nine of the 13 topology variants. Four variants
-(`cloud_cpu_high`, `device_edge_link_fast`, `edge_cloud_link_fast`, and
-`combined_stress`) are held out for final evaluation and are not used in
-checkpoint selection. Feedback modes must each be trained with at least three
-seeds and evaluated with the checkpoint's own mode. The optional
-`next-decision` credit ablation bootstraps from the same agent's next logged
-decision with gamma 0.9; it is not the default one-step result.
-
-## 5. Historical experiment sequence and modifications
-
-| Phase | Change or finding | What it established |
-|---|---|---|
-| Early training attempts | Fixed-deadline and relative-deadline runs produced very negative, unstable rewards and extreme latency tails. | The score alone was not a useful diagnosis. |
-| Workload/topology diagnosis | Found that a stage with many parallel instances was modeled as one summed serial task; cloud capacity was also configured below device/edge capacity. | The apparent RL failure was substantially a problem-definition and topology issue. |
-| Corrected workload and hierarchy | Adopted mean completed-instance work, 3 devices, 2 edges, a faster shared cloud, calibrated synthetic deadlines, and feasibility-aware reward. | Replaced the degenerate task/capacity setup; prior checkpoint scores are not comparable. |
-| V8 baseline | Trained/evaluated on the reference topology and tested the same 13-variant sensitivity sweep. | Exposed severe sensitivity to the slow device–edge link and one edge-CPU tail-latency case. |
-| Robust v9 | Scheduled all 13 variants in seeded, shuffled, near-balanced training cycles; selected a checkpoint by mean validation reward across seven variants; reran the same held-out sweep. | Slow-link performance improved substantially, but gains were mixed across variants. |
-
-The older pre-correction percentages and million-second latency tails are
-retained only as diagnostic history. They used different task semantics and/or
-deadline assumptions, and should not be plotted as a continuous learning
-curve against v8/v9.
-
-## 6. Historical training and evaluation protocol
-
-Robust v9 was trained for 100 episodes of 200 tasks. There are 13 topology
-variants; the seeded schedule contains each variant in shuffled cycles, so
-each appears 7 or 8 times. Validation runs every 10 episodes on the complete
-578-task chronological validation split under seven variants: baseline, low
-edge CPU, low cloud CPU, slow device–edge link, slow edge–cloud link,
-alternate device-to-edge mapping, and combined stress. The selected model
-maximizes mean validation reward over those variants. V8 checkpoint selection
-used reference-topology validation, so v8 and v9 best-validation rewards are
-not directly comparable.
-
-The test sweep evaluates Greedy EDF, centralized DQN, and hierarchical
-no-feedback/periodic/frequent-feedback policies on the same 579 test tasks,
-seed 10001, across all 13 topology variants. The simulator is deterministic
-and ignores its seed. Since the same discrete variants are included in robust
-training, the sweep measures held-out-task robustness to the tested variant
-family, not performance on topology conditions never seen in training.
-
-![Training and validation curves](figures/validation_curves.png)
-
-## 7. Historical results
-
-### 6.1 Reference-topology policy comparison
-
-The table below uses the v8 reference-topology held-out run. Feasible-task
-success conditions on the 502 tasks classified as no-queue-feasible; raw
-success uses all 579 tasks. Latencies are in seconds. The communication column
-adds modeled task traffic and feedback bytes.
-
-| Policy | Raw deadline success | Feasible-task success | Median latency | P95 latency | Mean device energy (J) | Communication (GB) |
+| Feedback | DQN success | Double DQN success | DQN P95 | Double DQN P95 | DQN device energy | Double DQN device energy |
 |---|---:|---:|---:|---:|---:|---:|
-| Random | 55.3% | 63.7% | 0.753 | 200.18 | 11.418 | 0.496 |
-| Greedy EDF | 86.0% | 99.2% | 0.266 | 6.83 | 0.145 | 1.043 |
-| Centralized DQN | 86.2% | 99.4% | 0.304 | 7.11 | 0.148 | 0.855 |
-| Hierarchical, no feedback | 83.6% | 96.4% | 0.285 | 7.20 | 0.171 | 0.908 |
-| Hierarchical, periodic | 85.3% | 98.4% | 0.342 | 7.11 | 0.147 | 0.815 |
-| Hierarchical, frequent | 84.8% | 97.8% | 0.342 | 7.12 | 0.147 | 0.815 |
+| None | 75.01% | 73.39% | 16.79 s | 16.05 s | 0.211 J | 0.210 J |
+| Periodic | 74.28% | 73.49% | 16.90 s | 17.36 s | 0.331 J | 0.211 J |
+| Frequent | 74.63% | 74.33% | 16.91 s | 15.08 s | 0.260 J | 0.244 J |
 
-The reference results do not show a decisive RL win: centralized DQN is 0.2
-percentage points above Greedy EDF in raw success, while hierarchical
-periodic is 0.7 points below it. The centralized policy uses full state and
-has no feedback-message cost, so it is an oracle-style benchmark rather than
-an equal-information deployment comparison. Periodic feedback is better than
-no feedback here, but frequent feedback does not improve the reported outcome
-and carries more feedback traffic. These small differences should not be
-treated as statistically significant.
+Metrics are means of five training-seed means, each averaging five
+noise runs. Paired differences are Double DQN minus DQN. Descriptive
+percentile intervals use 2,000 bootstrap resamples of the five paired
+training seeds.
 
-![Reference topology policy metrics](figures/heldout_policy_comparison_v8.png)
-
-### 6.2 Topology robustness: v8 versus robust v9
-
-| Test variant | Hierarchical v8 raw success | Robust v9 raw success | Feasible-task success v8 → v9 | Hierarchical P95 latency v8 → v9 |
+| Feedback | Success difference (pp) | 95% interval | P95 difference (s) | 95% interval |
 |---|---:|---:|---:|---:|
-| Reference topology | 85.3% | 85.7% | 98.4% → 98.8% | 7.11 → 6.90 s |
-| Device–edge link at 10%, propagation doubled | 0.0% | 36.6% | 0.0% → 98.6% | 8.35 → 12.13 s |
-| Edge CPU at 50% | 83.8% | 83.8% | 96.6% → 96.6% | 48.75 → 7.11 s |
-| Cloud CPU at 50% | 74.8% | 75.0% | 97.1% → 97.3% | 15.06 → 15.05 s |
-| Combined stress | 76.7% | 75.0% | 99.6% → 97.3% | 11.25 → 9.61 s |
+| None | −1.62 | [−4.00, 1.35] | −0.74 | [−2.98, 1.54] |
+| Periodic | −0.79 | [−2.97, 1.66] | +0.46 | [−1.77, 2.36] |
+| Frequent | −0.30 | [−1.29, 0.76] | −1.83 | [−6.95, 2.74] |
 
-The slow-link result needs both success measures: only 215 of 579 tasks are
-no-queue-feasible under that topology. Robust v9 succeeds on 36.6% of all
-tasks, while its 98.6% feasible-task rate shows that almost all tasks that
-could succeed in principle do succeed in this run. Its p95 latency is worse
-than v8 in this variant, so the success improvement is not a universal
-latency improvement.
+DQN has higher mean success in these three modes. Double DQN has lower
+mean P95 without feedback and with frequent feedback, and uses less
+mean device energy in each mode. All paired success and P95 intervals
+include zero. They describe variability across the five seeds on one
+test window. They do not establish equivalence or a general advantage.
 
-Across all 13 variants, hierarchical periodic raw success ranges from 0% to
-98.6% for v8 and from 36.6% to 99.1% for v9. The lower bound improves, but
-combined stress regresses slightly and the reference result remains just
-behind Greedy EDF (85.7% vs 86.0%). This is a mixed robustness result, not
-evidence that the learned model is globally superior.
+The four held-out topologies change the comparison. Each cell below
+reports DQN / Double DQN using the same five pairs of training seeds.
 
-![Raw and feasible success across topology variants](figures/topology_robustness.png)
+| Topology | Feedback | Success (%) | P95 (s) |
+|---|---|---:|---:|
+| Faster cloud | None | 87.56 / 86.47 | 7.73 / 8.65 |
+| Faster cloud | Periodic | 86.99 / 85.87 | 7.40 / 8.20 |
+| Faster cloud | Frequent | 86.56 / 86.78 | 7.92 / 7.91 |
+| Faster device–edge link | None | 74.96 / 64.41 | 18.06 / 18.31 |
+| Faster device–edge link | Periodic | 68.84 / 68.84 | 19.29 / 20.62 |
+| Faster device–edge link | Frequent | 68.61 / 68.28 | 21.52 / 22.80 |
+| Faster edge–cloud link | None | 73.24 / 62.62 | 18.13 / 18.45 |
+| Faster edge–cloud link | Periodic | 67.27 / 66.93 | 19.50 / 20.75 |
+| Faster edge–cloud link | Frequent | 67.14 / 67.03 | 21.73 / 22.83 |
+| Combined stress | None | 50.72 / 59.22 | 35.73 / 27.81 |
+| Combined stress | Periodic | 61.80 / 57.86 | 37.53 / 37.50 |
+| Combined stress | Frequent | 61.73 / 60.17 | 29.42 / 40.41 |
 
-![P95 latency across topology variants](figures/topology_p95_latency.png)
+Under combined stress, Double DQN has the higher mean success
+without feedback. DQN has the higher mean success with periodic and
+frequent feedback. The latency advantage also changes with the mode.
+These are scenario-specific descriptive comparisons.
 
-### 6.3 Validation selection
+For Double DQN, evaluating each event checkpoint at its own trained
+threshold gives 74.29%, 74.95% and 74.98% success for thresholds 0.1,
+0.25 and 0.5. The corresponding P95 values are 17.00, 17.46 and 17.80 s.
+The event threshold of 0.5 uses 10,430 feedback bytes per run, versus
+35,126 with frequent feedback. This is a reduction of about 70% in
+feedback bytes, accompanied by a higher P95. Comparisons across modes
+include their different feedback costs in the reward.
 
-The recorded best validation rewards are `-0.0306` hierarchical and `-0.0197`
-centralized for v8, versus `-0.0420` hierarchical and `-0.0282` centralized
-for v9. V9's score averages seven topologies, while v8's is from the reference
-topology only. The lower v9 values are therefore not evidence of regression
-by themselves; the validation objectives differ.
+At the matched event threshold of 0.25, DQN reaches 73.07% deadline
+success and 16.61 s mean P95, compared with 74.95% and 17.46 s for
+Double DQN. Mean feedback traffic is 11,988 and 11,087 bytes per
+run respectively. Each learner has five training seeds and each
+checkpoint is evaluated at its own trained threshold.
 
-## 8. Limitations and threats to validity
+## Cloud rule ablation on sequential-credit checkpoints
 
-1. **Synthetic MEC fields:** Alibaba does not provide these device, radio,
-   payload, edge, cloud, or deadline values. Results depend on the declared
-   assumptions.
-2. **Serial resource model:** SimPy has one execution slot per device/edge
-   and one cloud worker. It is multi-device/multi-edge, but not a multi-core
-   or multi-worker execution model; shared-network contention is not modeled.
-3. **Single trace split and one test seed:** There are no independent trace
-   windows or statistical intervals. Deterministic simulation does not
-   eliminate training-seed or workload-sampling uncertainty.
-4. **Known topology family:** The same 13 discrete variants are sampled
-   during training and then swept at test time. Test tasks are held out, but
-   the topology parameters are not.
-5. **Heavy-tailed workload:** Tail metrics are essential; an average can hide
-   extreme jobs. Deadline values are synthetic, and variant feasibility can
-   differ substantially.
-6. **Centralized information advantage:** The centralized policy sees the
-   full state, unlike separate device/edge policies. It is a useful
-   performance reference, not a fair communication-budget match.
-7. **Learning formulation:** Delayed terminal credit assigns the task outcome
-   to logged decisions using a one-step terminal target. This does not model
-   long-horizon queue-control returns as a conventional multi-step MDP.
-8. **No deployment evidence:** The sensitivity variants are hypothetical
-   simulator parameters, not measurements from deployed MEC systems.
+Use the five frequent-feedback checkpoints for each algorithm. For each
+checkpoint, evaluate the learned cloud and EDF, SPT and FIFO fixed rules
+with identical device and edge weights, arrivals, deadlines and noise
+seeds. The upstream decisions can respond to the queue changes caused
+by the cloud scheduler. Pair the resulting trajectories by checkpoint,
+topology and noise seed, then average noise within each training seed.
+Fixed-rule comparisons are made within each checkpoint. Across the
+two learning algorithms, upstream weights can differ even with a
+matched training seed.
 
-## 9. Conclusions and next experiments
+The replay logs rule selections only when at least two jobs wait in
+the cloud queue. Selecting multiple rules within one checkpoint shows
+that its decisions vary across the observed queue states. Different rules
+can still select the same job, so rule counts alone do not establish a
+change in dispatch order or an improvement over a fixed rule.
+The cloud learner sees a normalized negative cost based on queue
+length multiplied by the selected job's estimated service time. Its
+next-decision target links successive contested dispatches. This is
+a proxy for queue occupancy during service. Arrivals during service
+are not included in the immediate cost.
+At a given dispatch, queue length is fixed across candidate actions.
+The immediate cost therefore favors shorter jobs. Any benefit from
+choosing a different rule would have to appear through subsequent
+contested states. The cloud cost also lacks an explicit term for
+deadline misses, so the policy's training objective and the
+checkpoint selection metric differ.
 
-The key correction was to the modeled workload, not simply the neural
-network: the old adapter made a parallel stage into an oversized serial job.
-After correcting that interpretation and making the topology hierarchical,
-v8 established a meaningful held-out benchmark. Topology augmentation then
-improved the worst observed raw-success case and repaired a large p95-tail
-regression under low edge CPU, but did not make hierarchical RL better than
-Greedy EDF in the reference topology or in every stress case.
+The replay uses `compare_integrated_policies.py --cloud-rule-ablation`,
+with feedback mode `frequent` and evaluation seeds 10001 to 10005.
+Outputs are under `results/cloud-rule-sequential/`, one folder per
+algorithm and training seed. The learned rule counts are in
+`cloud_contested_actions.csv`.
 
-The next defensible steps are: (a) evaluate multiple independent training
-seeds and additional chronological trace windows; (b) reserve topology
-parameter combinations—not just tasks—as a true unseen-topology test; (c)
-include capacity concurrency and shared-link contention if those are part of
-the target system; and (d) compare policies with matched state information
-and communication budgets. Do not claim production-ready or statistically
-significant gains from the present runs.
+| Frozen upstream weights | Cloud rule | Reference success | Reference P95 | Combined stress success | Combined stress P95 |
+|---|---|---:|---:|---:|---:|
+| DQN | Learned | 74.63% | 16.91 s | 61.73% | 29.42 s |
+| DQN | EDF | 74.65% | 16.37 s | 61.63% | 28.88 s |
+| DQN | SPT | 75.23% | 12.26 s | 62.02% | 26.19 s |
+| DQN | FIFO | 74.25% | 18.25 s | 61.59% | 30.94 s |
+| Double DQN | Learned | 74.33% | 15.08 s | 60.17% | 40.41 s |
+| Double DQN | EDF | 74.24% | 15.29 s | 60.17% | 40.25 s |
+| Double DQN | SPT | 74.82% | 12.36 s | 60.52% | 39.05 s |
+| Double DQN | FIFO | 73.90% | 17.82 s | 60.14% | 41.32 s |
 
-## 10. Reproducibility: historical v8/v9 runs
+SPT has the lowest mean P95 and the highest mean deadline success in
+each of the five tested topologies for both sets of frozen upstream
+weights. Across those topologies, every checkpoint selects one rule
+whenever multiple jobs wait.
 
-The full accepted local trace is required in `data/raw/`; raw data is not
-committed. Commands below reproduce the documented robust training and the
-same topology sweep:
+| Algorithm | Seed 42 | Seed 43 | Seed 44 | Seed 45 | Seed 46 |
+|---|---|---|---|---|---|
+| DQN | FIFO | FIFO | EDF | SPT | EDF |
+| Double DQN | SPT | FIFO | EDF | SPT | EDF |
 
-```bash
-python scripts/train_integrated_rl.py --source alibaba2017 \
-  --deadline-policy best-tier-calibrated --topology-augmentation sweep \
-  --episodes 100 --tasks 200 --max-trace-tasks 30000 \
-  --validation-tasks 578 --validation-every 10 \
-  --output artifacts/models/alibaba-best-tier-calibrated-topology-robust-v9
+The queue reward and next-decision target therefore still produce a
+constant cloud rule per checkpoint under these conditions.
+For all ten checkpoints, the replay with the corresponding fixed
+rule exactly reproduces every per-task result field, apart from the
+policy label, across 14,475 task evaluations per checkpoint.
 
-python scripts/sweep_topologies.py \
-  --models artifacts/models/alibaba-best-tier-calibrated-topology-robust-v9 \
-  --deadline-policy best-tier-calibrated --tasks 579 \
-  --output results/alibaba-topology-sensitivity-robust-v9
+On the reference topology, the five Double DQN checkpoints achieve
+74.33% deadline success and 15.08 s mean P95 with the learned cloud.
+With those same upstream weights, SPT fixed achieves 74.82% and
+12.36 s, EDF fixed 74.24% and 15.29 s, and FIFO fixed 73.90% and
+17.82 s. Across all five topologies, each checkpoint selects one
+rule whenever multiple jobs wait. Seeds 42 and 45 select SPT,
+43 selects FIFO, and 44 and 46 select EDF. This behavior persists
+with the queue reward and next-decision target in the tested runs.
 
-python scripts/generate_rl_report_figures.py
-```
+## Experimental protocol
 
-The report figures are generated from the v8/v9 training logs, aggregate
-metrics, and topology-sweep CSVs. Primary source artifacts are
-[`v8 metadata`](../artifacts/models/alibaba-best-tier-calibrated-v8/metadata.json),
-[`robust v9 metadata`](../artifacts/models/alibaba-best-tier-calibrated-topology-robust-v9/metadata.json),
-[`v8 aggregate metrics`](../results/alibaba-best-tier-calibrated-v8/aggregate_metrics.csv),
-[`v8 topology sweep`](../results/alibaba-topology-sensitivity-v8/topology_metrics.csv),
-and
-[`robust v9 topology sweep`](../results/alibaba-topology-sensitivity-robust-v9/topology_metrics.csv).
-
-## 11. Revised feedback ablation: pending consolidation
-
-The current campaign uses the revised trainer and trace adapter; it is a
-separate experiment from the historical v8/v9 results. Its purpose is to
-compare feedback policies with independently trained checkpoints and then
-evaluate them on a chronologically reserved test split. No partial campaign
-numbers are presented as final findings.
-
-### 11.1 Conditions and what they test
+### 1. Conditions and what they test
 
 There are six training conditions per training seed: `none`, `periodic`,
 `frequent`, and `event` at thresholds 0.1, 0.25, and 0.5. Five training seeds
-(42–46) therefore require 30 Double-DQN runs.
+(42–46) therefore require 30 runs per algorithm.
 
 | Condition | Trigger | Interpretation |
 |---|---|---|
@@ -385,7 +171,7 @@ delay, and information age, but feedback messages do not contend with
 data-plane links. The `periodic` and `event` modes both use a fallback interval
 of five observations, but only the latter also triggers on signal changes.
 
-### 11.2 Trace splits, sampling, and arrival compression
+### 2. Trace splits, sampling, and arrival compression
 
 The accepted Alibaba workload has 2,891 chronologically ordered tasks:
 1,734 for training, 578 for validation, and 579 for test. Task work is derived
@@ -405,7 +191,7 @@ offered load 0.75 relative to 12,500 MIPS. The resulting factor is reused on
 the test split without adjustment. Test data are not used to calibrate load or
 select checkpoints.
 
-### 11.3 Learners, training budget, and reward
+### 3. Learners, training budget, and reward
 
 Each agent uses a two-hidden-layer, 64-unit network; replay capacity 8,000;
 batch size 32; learning rate `3e-4`; target-network update every 500
@@ -432,7 +218,7 @@ Because feedback cost differs by mode, the modes do not optimize exactly the
 same reward function; this is a limitation to retain when interpreting the
 ablation.
 
-### 11.4 Topology variants
+### 4. Topology variants
 
 Training follows a seeded, shuffled, near-balanced schedule over nine
 variants: reference; device CPU at 75% and 125%; edge CPU at 50% and 150%;
@@ -449,7 +235,7 @@ propagation halved; and combined stress (all CPU capacities at 75%, both link
 bandwidths at 50%, propagation doubled). These are simulated sensitivity
 cases, not observed deployments or independent trace periods.
 
-### 11.5 Validation and checkpoint selection
+### 5. Validation and checkpoint selection
 
 Every 25 episodes, each controller is evaluated greedily (no exploration or
 replay updates) on the same 578 validation tasks under five noise seeds.
@@ -459,7 +245,7 @@ printed reward is diagnostic; it is not the selection metric. Patience is
 eight validation checks without improvement. Training stops when both
 controllers have reached that patience, or at the 1,000-episode budget.
 
-### 11.6 Test evaluation, comparison policies, and metrics
+### 6. Test evaluation, comparison policies, and metrics
 
 Each checkpoint is evaluated in its own trained feedback mode and threshold,
 without exploration. Each of five evaluation seeds (10001–10005) evaluates
@@ -480,7 +266,7 @@ feedback bytes; and feedback information age. Raw success remains the
 primary all-task measure. P95 is computed per evaluation run, and information
 age is accumulated when a decision consumes a delivered snapshot.
 
-### 11.7 Aggregation and uncertainty
+### 7. Aggregation and uncertainty
 
 For each training seed, metrics are first averaged over its five evaluation
 seeds. The final summary then reports the mean and sample standard deviation
@@ -490,7 +276,7 @@ Evaluation seeds therefore do not masquerade as independent training runs.
 With five training seeds, intervals remain uncertain and should be treated as
 descriptive rather than universal evidence.
 
-### 11.8 Outputs and completion criteria
+### 8. Outputs and completion criteria
 
 Checkpoints and training/decision logs are under
 `artifacts/models/feedback-ablation/`; comparison results are under
@@ -504,7 +290,11 @@ Do not pool results or report confidence intervals until all requested
 condition/seed result files exist and the protocol/hash checks pass. After
 the runs finish, create the consolidated table from the repository root:
 
-After all runs finish, create the consolidated table from the repository root:
+The comparison command writes `aggregate_metrics.csv`, which retains the
+evaluation event threshold. The compact `energy_success_bytes.csv` omits that
+column and must not be used to compare event thresholds. The summarizer reads
+`aggregate_metrics.csv` so each trained threshold and tested threshold remain
+separate. After the requested runs finish, create the reference-topology table:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\summarize_feedback_ablation.py `
@@ -519,8 +309,9 @@ After all runs finish, create the consolidated table from the repository root:
 
 The summary reports means, standard deviations, and bootstrap 95% confidence
 intervals across training-seed means for raw deadline success, P95 latency,
-device energy, communication/feedback bytes, and feedback age. Until this
-summary is generated and inspected, the new campaign has no final comparative
-conclusion. Replace this status with the consolidated results and their
-limitations after completion; retain the historical sections above as
-historical results rather than silently overwriting them.
+device energy, communication/feedback bytes, and feedback age. For the four held-out topology scenarios, rerun with
+`--scenario alibaba2017_test:cloud_cpu_high`,
+`--scenario alibaba2017_test:device_edge_link_fast`,
+`--scenario alibaba2017_test:edge_cloud_link_fast`, or
+`--scenario alibaba2017_test:combined_stress`. For a comparison between algorithms, use only conditions with the same
+feedback mode, threshold and complete set of paired training seeds.

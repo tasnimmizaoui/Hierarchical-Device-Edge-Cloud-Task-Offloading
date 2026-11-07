@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from statistics import fmean, stdev
 
+from mec_offloading.experiment_metadata import configuration_hash
+
 METRICS = (
     "deadline_success_rate",
     "p95_latency_s",
@@ -19,9 +21,23 @@ METRICS = (
     "total_bytes",
     "mean_feedback_age_s",
 )
+REQUIRED_METRICS = tuple(metric for metric in METRICS if metric != "total_bytes")
 
 
-def verify_protocol(paths: list[Path]) -> None:
+def _comparison_hash(metadata: dict, *, matched_event_only: bool) -> str:
+    digest = str(metadata.get("configuration_hash", ""))
+    if not matched_event_only or metadata.get("feedback") != "event":
+        return digest
+    configuration = metadata["configuration"]
+    if configuration_hash(configuration) != digest:
+        raise ValueError("Event comparison configuration does not match its hash")
+    threshold = metadata["training_event_threshold"]
+    if threshold not in configuration["event_thresholds"]:
+        raise ValueError("Event checkpoint was not evaluated at its trained threshold")
+    return configuration_hash({**configuration, "event_thresholds": [threshold]})
+
+
+def verify_protocol(paths: list[Path], *, matched_event_only: bool = False) -> None:
     signatures = set()
     configuration_hashes: dict[tuple[object, ...], set[str]] = {}
     for path in paths:
@@ -45,7 +61,7 @@ def verify_protocol(paths: list[Path]) -> None:
             metadata.get("training_algorithm"),
         )
         configuration_hashes.setdefault(condition, set()).add(
-            str(metadata.get("configuration_hash", ""))
+            _comparison_hash(metadata, matched_event_only=matched_event_only)
         )
     if len(signatures) > 1:
         raise ValueError(
@@ -72,7 +88,8 @@ def _bootstrap_interval(values: list[float], *, seed: int) -> tuple[float, float
 
 
 def summarize_files(
-    files: list[tuple[str, float, str, int, Path]], scenario: str
+    files: list[tuple[str, float, str, int, Path]], scenario: str,
+    *, matched_event_only: bool = False,
 ) -> list[dict[str, float | int | str]]:
     grouped: dict[
         tuple[str, float, str, str, str], dict[str, dict[str, list[float]]]
@@ -82,12 +99,13 @@ def summarize_files(
         metadata = json.loads(
             path.with_name("metadata.json").read_text(encoding="utf-8")
         )
-        hashes[(mode, training_threshold, algorithm)] = str(
-            metadata["configuration_hash"]
+        hashes[(mode, training_threshold, algorithm)] = _comparison_hash(
+            metadata, matched_event_only=matched_event_only
         )
+        matched_noise_seeds = []
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
-            if not set(("scenario", "policy", *METRICS)).issubset(
+            if not set(("scenario", "policy", *REQUIRED_METRICS)).issubset(
                 reader.fieldnames or ()
             ):
                 raise ValueError(f"{path} is missing required metric columns")
@@ -95,6 +113,15 @@ def summarize_files(
                 if row["scenario"] != scenario:
                     continue
                 evaluation_threshold = row.get("event_threshold", "")
+                if (
+                    matched_event_only and mode == "event" and evaluation_threshold
+                    and float(evaluation_threshold) != training_threshold
+                ):
+                    continue
+                if matched_event_only and mode == "event" and row["policy"] == "hierarchical_event":
+                    if not evaluation_threshold:
+                        raise ValueError(f"{path} has an event result without its replay threshold")
+                    matched_noise_seeds.append(row["seed"])
                 group_key = (
                     mode,
                     training_threshold,
@@ -108,7 +135,17 @@ def summarize_files(
                 )
                 for metric in METRICS:
                     per_seed = values.setdefault(metric, {})
-                    per_seed.setdefault(str(training_seed), []).append(float(row[metric]))
+                    value = (
+                        float(row["communication_bytes"])
+                        + float(row["feedback_bytes"])
+                        if metric == "total_bytes"
+                        else float(row[metric])
+                    )
+                    per_seed.setdefault(str(training_seed), []).append(value)
+        if matched_event_only and mode == "event" and sorted(matched_noise_seeds) != sorted(
+            map(str, metadata["test_seeds"])
+        ):
+            raise ValueError(f"{path} does not contain one matched event result per noise seed")
 
     summaries = []
     for (mode, train_threshold, eval_threshold, algorithm, policy), metrics in sorted(
@@ -120,6 +157,7 @@ def summarize_files(
             "feedback_mode": mode,
             "training_event_threshold": train_threshold,
             "evaluation_event_threshold": eval_threshold,
+            "scenario": scenario,
             "algorithm": algorithm,
             "policy": policy,
             "training_seed_count": seed_count,
@@ -160,6 +198,8 @@ def main() -> None:
     parser.add_argument("--credit-mode", choices=["terminal", "next-decision"],
                         default="terminal")
     parser.add_argument("--scenario", default="alibaba2017_test")
+    parser.add_argument("--matched-event-only", action="store_true",
+                        help="Pool only the trained event threshold, even with extra replay thresholds")
     args = parser.parse_args()
     if (
         not args.seeds
@@ -180,7 +220,7 @@ def main() -> None:
                 f"fb-{mode}-threshold-{threshold:g}-{algorithm}-seed-{seed}-"
                 f"{args.credit_mode}"
             )
-            / "energy_success_bytes.csv",
+            / "aggregate_metrics.csv",
         )
         for mode in args.feedback_modes
         for threshold in (
@@ -193,8 +233,10 @@ def main() -> None:
     if missing:
         parser.error("Missing ablation results: " + ", ".join(map(str, missing)))
     try:
-        verify_protocol([path for _, _, _, _, path in files])
-        rows = summarize_files(files, args.scenario)
+        verify_protocol([path for _, _, _, _, path in files],
+                        matched_event_only=args.matched_event_only)
+        rows = summarize_files(files, args.scenario,
+                               matched_event_only=args.matched_event_only)
     except (ValueError, OSError, KeyError) as error:
         parser.error(str(error))
     if not rows:

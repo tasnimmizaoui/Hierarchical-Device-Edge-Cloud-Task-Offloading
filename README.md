@@ -24,9 +24,7 @@ tâche, un feedback causal différé, des checkpoints choisis sur validation, de
 ablation de fréquence et le suivi de l'apprentissage. Voir le
 [guide technique et limites de la V2](docs/ETUDIANTE_2_V2_FR.md) et
 [le guide initial de fusion](docs/INTEGRATION_RL.md). Le
-[rapport expérimental](docs/rl_experiment_report.md) détaille les résultats
-historiques v8/v9 et le nouveau calibrage contendu; les scores historiques ne
-sont pas comparables aux réentraînements à venir.
+[rapport expérimental](docs/rl_experiment_report.md) détaille la comparaison DQN et Double DQN ainsi que le calibrage de charge sur la validation.
 
 ```bash
 pip install -e ".[dev,rl,web]"
@@ -57,8 +55,7 @@ hypothèses, documentées dans
 [`docs/ETUDIANTE_2_V2_FR.md`](docs/ETUDIANTE_2_V2_FR.md).
 
 Le protocole actuel entraîne sur neuf des 13 variantes et garde quatre
-topologies (dont `combined_stress`) pour le test final. Le dashboard conserve
-les résultats v8/v9 comme référence historique. La méthode et les limites sont dans
+topologies (dont `combined_stress`) pour le test final. Le tableau de bord compare les résultats DQN et Double DQN par topologie. La méthode et les limites sont dans
 [`docs/INTEGRATION_RL.md`](docs/INTEGRATION_RL.md).
 
 **Limite de capacité :** le SimPy backend supporte plusieurs devices et edges,

@@ -15,21 +15,24 @@ st.set_page_config(page_title="MEC · Device / Edge / Cloud", layout="wide", pag
 st.title("☁️ Offloading Device → Edge → Cloud/HPC")
 st.caption("Projet 05 · Futurs réseaux mobiles · Résultats de simulation")
 
+DQN_RUN = "fb-frequent-threshold-0.25-dqn-seed-42-next-decision"
+DOUBLE_DQN_RUN = "fb-frequent-threshold-0.25-double-dqn-seed-42-next-decision"
+
 result_dir = Path(st.sidebar.text_input(
     "Dossier de comparaison",
-    "results/cloud-pilot-learned/fb-frequent-seed-42-terminal",
+    f"results/feedback-ablation/{DOUBLE_DQN_RUN}",
 ))
 model_dir = Path(st.sidebar.text_input(
     "Dossier du modèle",
-    "artifacts/models/cloud-pilot-learned/fb-frequent-seed-42-terminal",
+    f"artifacts/models/feedback-ablation/{DOUBLE_DQN_RUN}",
 ))
 reference_topology_dir = Path(st.sidebar.text_input(
-    "Balayage topologie de référence",
-    "results/alibaba-topology-sensitivity-v8",
+    "Résultats DQN par topologie",
+    f"results/feedback-ablation/{DQN_RUN}",
 ))
 robust_topology_dir = Path(st.sidebar.text_input(
-    "Balayage topologie du modèle robuste",
-    "results/alibaba-topology-sensitivity-robust-v9",
+    "Résultats Double DQN par topologie",
+    f"results/feedback-ablation/{DOUBLE_DQN_RUN}",
 ))
 
 metadata_file = result_dir / "metadata.json"
@@ -62,17 +65,31 @@ training = pd.read_csv(training_file) if training_file.is_file() else pd.DataFra
 topology_tables = []
 topology_metadata = {}
 for label, directory in (
-    ("Référence v8", reference_topology_dir),
-    ("Entraînement robuste v9", robust_topology_dir),
+    ("DQN", reference_topology_dir),
+    ("Double DQN", robust_topology_dir),
 ):
     metrics_path = directory / "topology_metrics.csv"
     metadata_path = directory / "metadata.json"
+    metadata = (
+        json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata_path.is_file() else {}
+    )
     if metrics_path.is_file():
         table = pd.read_csv(metrics_path)
         table["checkpoint"] = label
         topology_tables.append(table)
-    if metadata_path.is_file():
-        topology_metadata[label] = json.loads(metadata_path.read_text(encoding="utf-8"))
+    elif (directory / "aggregate_metrics.csv").is_file():
+        table = pd.read_csv(directory / "aggregate_metrics.csv")
+        threshold = metadata.get("training_event_threshold")
+        if threshold is not None and "event_threshold" in table:
+            tested_threshold = table["event_threshold"]
+            table = table[tested_threshold.isna() | tested_threshold.eq(threshold)]
+        table = table.groupby(["scenario", "policy"], as_index=False).mean(numeric_only=True)
+        table["variant"] = table["scenario"].str.partition(":")[2].replace("", "baseline")
+        table["checkpoint"] = label
+        topology_tables.append(table)
+    if metadata:
+        topology_metadata[label] = metadata
 topology_summary = (
     pd.concat(topology_tables, ignore_index=True)
     if topology_tables else pd.DataFrame()
@@ -151,7 +168,7 @@ with training_tab:
             with left:
                 st.markdown("**Reward / tâche**")
                 st.line_chart(item.set_index("episode")["team_task_reward"])
-                st.markdown("**Loss Double-DQN (uniquement si mises à jour)**")
+                st.markdown("**Perte d’apprentissage (uniquement si mises à jour)**")
                 losses = item.dropna(subset=["loss"])
                 if losses.empty:
                     st.info("Pas encore assez de transitions pour un minibatch.")
@@ -228,6 +245,7 @@ with topology_tab:
                 policy for policy in (
                     "greedy_edf",
                     "hierarchical_periodic",
+                    "hierarchical_frequent",
                     "centralized_rl",
                 )
                 if policy in policies
