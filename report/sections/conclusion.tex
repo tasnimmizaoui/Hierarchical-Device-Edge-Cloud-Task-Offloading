@@ -1,0 +1,18 @@
+\section{Conclusion and Perspectives}
+The repository currently supports a coherent three-tier SimPy execution model,
+separate device/edge/cloud policy contracts, explicit queues and links, device
+energy accounting, baseline metrics, and tested Double-DQN/feedback adapters.
+The committed baseline campaign is useful evidence that route and queue
+changes affect latency, deadlines, energy, and traffic; it is not evidence of
+universal superiority. Its main scientific limitation is that the integrated
+learning code assigns terminal credit per task and therefore does not yet
+constitute sequential hierarchical multi-agent RL.
+
+Before a final claim, the project should run the integrated training and
+comparison scripts, archive checkpoints and metadata, evaluate a real local
+Alibaba 2017 sample with chronological splits, and perform matched
+multi-device/multi-edge experiments. Feedback should eventually contend for
+control-plane capacity if communication overhead is a research outcome. A
+multi-worker cloud, independent-task versus DAG workload comparison, calibrated
+energy model, confidence intervals, and a stepable Gymnasium interface are
+also required. Federated RL is future work rather than a current contribution.

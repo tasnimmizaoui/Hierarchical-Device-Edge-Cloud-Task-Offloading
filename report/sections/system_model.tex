@@ -1,0 +1,49 @@
+\section{Architecture and System Model}
+\subsection{Three-tier topology}
+The canonical topology contains devices, associated edge servers, and one
+shared cloud scheduler. The default development configuration is one
+device--one edge--one cloud; the backend also accepts an explicit topology with
+three devices, two edges, and fixed device-to-edge associations. A task cannot
+choose an arbitrary edge. The explanatory architecture is shown in
+Fig.~\ref{fig:architecture}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/architecture.pdf}
+\caption{Implemented decision boundaries and task route.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Task and resource model}
+Each task has arrival time, decimal-MB input and result sizes, required MI, a
+relative deadline, device identifier, and optional priority. Execution time is
+\begin{equation}
+t_{\mathrm{cpu}} = \frac{\mathrm{MI}}{\mathrm{MIPS}}.
+\end{equation}
+For a link with bandwidth $B$ Mbps, propagation $p$, and queue wait $q$,
+\begin{equation}
+t_{\mathrm{link}} = \frac{8s}{B} + p + q,
+\end{equation}
+where $s$ is decimal MB. End-to-end latency is completion minus arrival, and
+a deadline is met when completion is no later than arrival plus the relative
+deadline.
+
+Every device and edge has a capacity-one SimPy resource. The cloud has one
+worker in the current implementation; its policy chooses EDF, shortest
+processing time, or FIFO when dispatching a queued job. Device energy uses
+CPU energy per MI and transmit/receive power times radio duration. Idle,
+reception infrastructure, retransmission, and cloud energy are not modeled.
+
+\subsection{Lifecycle and metrics}
+The lifecycle is arrival, device decision, optional device--edge upload, edge
+decision, optional edge--cloud upload and cloud dispatch, execution, and result
+return. Queues contribute waiting time. The result records route, timing,
+deadline status, device energy, communication delay and bytes. Fig.~\ref{fig:lifecycle}
+illustrates the route without implying that all routes use cloud.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/task_lifecycle.pdf}
+\caption{Task lifecycle through queues, links, and result return.}
+\label{fig:lifecycle}
+\end{figure}

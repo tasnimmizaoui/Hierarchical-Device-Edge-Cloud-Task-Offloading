@@ -1,0 +1,25 @@
+\section{Introduction}
+Multi-access edge computing (MEC) places compute close to data producers while
+retaining access to larger cloud or HPC resources \cite{etsiMec003}. A task
+must therefore be mapped to a device CPU, an associated edge CPU, or a shared
+cloud queue. The choice couples execution time, queueing, wireless and
+backhaul transmission, device energy, and a relative deadline. A centralized
+controller can observe more state, but it also requires broader information
+sharing and can become a coordination bottleneck.
+
+This project investigates a hierarchical alternative in which each tier makes
+only the decision exposed by its local contract. The device chooses local
+execution or its assigned edge; the edge chooses edge execution or cloud
+forwarding; and the cloud selects a queue discipline. The repository's
+contribution is primarily an auditable integration: a single SimPy backend
+executes all policies, with common task, timing, energy, and metric definitions.
+Double-DQN adapters and delayed adjacent-tier feedback are implemented at this
+boundary, but their scientific validation remains incomplete.
+
+The article makes three bounded contributions. First, it specifies the
+three-tier model and policy interfaces. Second, it reports the committed
+three-seed synthetic baseline evidence without confusing it with trace
+measurements. Third, it identifies the exact gap between the implemented
+terminal one-step learning formulation and a sequential multi-agent RL
+environment. The remainder presents related work, the model, implementation,
+evaluation evidence, and limitations.

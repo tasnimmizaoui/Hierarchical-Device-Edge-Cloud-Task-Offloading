@@ -1,0 +1,25 @@
+\section{Implementation}
+The implementation targets Python 3.11 and uses SimPy 4.x, NumPy, Pandas,
+Matplotlib, PyYAML, Gymnasium interfaces at the RL boundary, PyTorch, and
+Stable-Baselines3-compatible project dependencies. The canonical simulator and
+domain layers do not import Gymnasium or Stable-Baselines3. Reproducibility is
+provided by explicit workload and policy seeds, fresh SimPy resources per run,
+CSV exports, and unit tests for models, metrics, queue order, observations,
+credit, feedback, and trace mapping.
+
+\subsection{Configuration and workload provenance}
+The synthetic smoke configuration uses three conceptual devices at 1000 MIPS,
+two demonstration edges at 500 and 750 MIPS, and a cloud configuration of
+20,000 MIPS in the baseline protocol (the YAML multi-edge demonstration uses
+500 MIPS). Device--edge bandwidth is 100 Mbps with 10 ms propagation, and
+edge--cloud bandwidth is 1000 Mbps with 40 ms propagation. Synthetic tasks use
+0.05-s inter-arrivals, 250--1000 MI, 0.5--2.0 MB input, 0.05--0.2 MB result,
+and 1--4 s relative deadlines. These are assumptions, not trace measurements.
+
+The committed baseline experiment uses the standard one-device/one-edge smoke
+configuration for comparability, three seeds, and ten tasks per seed. The
+Alibaba adapter is prepared for local 2017 \texttt{batch\_task.csv} and
+\texttt{batch\_instance.csv}; it derives MI from valid runtime and
+\texttt{real\_cpu\_avg}. No raw Alibaba files, processed trace result, or
+integrated-RL checkpoint is committed, so no trace or RL performance claim is
+made here.

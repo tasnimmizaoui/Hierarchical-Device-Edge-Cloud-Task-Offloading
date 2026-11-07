@@ -1,0 +1,31 @@
+\section{Related Work}
+MEC surveys emphasize that offloading decisions trade computation against
+communication and energy costs \cite{mao2017drloffload}. Dynamic formulations
+often combine placement, resource allocation, and time-varying queues; this
+project deliberately separates those concerns so that each tier has a small,
+inspectable action space. Unlike a full optimization formulation, the current
+backend is an independent-task simulator and does not claim optimality.
+
+Simulation frameworks provide useful context for this design. EdgeCloudSim
+supports edge-network and computation experiments \cite{sonmez2018edgecloudsim},
+while iFogSim targets fog/IoT resource-management modeling
+\cite{gupta2017ifogsim}. The repository instead uses a small custom SimPy
+model because device, edge, and cloud policy boundaries must remain separately
+injectable. This choice is documented as an engineering constraint, not as a
+claim that the model is more general than those frameworks.
+
+Deep Q-learning provides a natural discrete-action baseline
+\cite{mnih2015human}. Double Q-learning reduces the overestimation tendency
+associated with naïve max targets \cite{hasselt2016double}; the repository
+reuses this algorithmic family through independent device, edge, cloud, and
+centralized adapters. However, the current integration gives terminal credit
+to each task decision and does not expose a stepable Gymnasium multi-agent
+environment. It should consequently be compared to sequential hierarchical or
+multi-agent RL only after that environment and its temporal credit assignment
+are implemented.
+
+Finally, Alibaba Cluster Trace 2017 is an infrastructure batch workload
+\cite{alibaba2017}, not a mobile MEC measurement. The adapter derives compute
+demand from completed instance records, while payloads, deadlines, device
+assignment, battery, and network conditions remain synthetic. This distinction
+prevents a datacenter trace from being presented as direct wireless evidence.

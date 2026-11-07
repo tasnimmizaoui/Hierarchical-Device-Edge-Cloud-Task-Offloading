@@ -1,0 +1,57 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{url}
+
+\title{Hierarchical Device--Edge--Cloud Task Offloading:\\
+Implementation Audit and Reproducible Simulation Baselines}
+
+\author{
+\IEEEauthorblockN{Student 1 and Student 2}
+\IEEEauthorblockA{INSAT, Tunis, Tunisia\\
+\{student1,student2\}@example.invalid}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper documents an auditable implementation of hierarchical task
+offloading across device, edge, and cloud tiers. The repository provides a
+discrete-event SimPy backend with separate device-placement, edge-placement,
+and cloud-queue decisions, shared resource queues, network serialization, and
+device energy accounting. Four Double-DQN adapters are integrated at the
+policy boundary, but their current formulation assigns terminal credit to
+each task decision and is therefore a contextual one-step formulation rather
+than a sequential multi-agent Gymnasium environment. The committed
+quantitative evidence is a three-seed, ten-task synthetic baseline campaign.
+Cloud forwarding reduced mean latency from 3.164 s for local execution to
+0.513 s, while increasing communication traffic; all cloud and edge
+placements met the deadlines in this smoke workload, whereas local execution
+met 36.7\% of deadlines. These results validate the execution and metric
+pipeline, not general policy superiority. Integrated-RL comparison artifacts,
+public-trace results, and final multi-edge learning experiments are not
+committed and are consequently reported as open validation work. The paper
+states the simulator assumptions, trace mapping, policy contracts, and
+limitations needed for reproducible follow-up experiments.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mobile edge computing, task offloading, hierarchical reinforcement learning,
+discrete-event simulation, Double-DQN, reproducibility
+\end{IEEEkeywords}
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/system_model}
+\input{sections/proposed_method}
+\input{sections/implementation}
+\input{sections/evaluation}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}
