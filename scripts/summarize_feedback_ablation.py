@@ -186,6 +186,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", type=Path,
                         default=Path("results/feedback-ablation"))
+    parser.add_argument("--supplemental-results-root", type=Path,
+                        help="Prefer completed evaluations in this directory when present")
     parser.add_argument("--feedback-modes", nargs="+",
                         choices=["none", "periodic", "frequent", "event"],
                         default=["none", "periodic", "frequent", "event"])
@@ -209,18 +211,23 @@ def main() -> None:
         or any(not 0 <= threshold <= 1 for threshold in args.event_thresholds)
     ):
         parser.error("Seeds and event thresholds must be unique and valid")
+    def result_path(mode: str, threshold: float, algorithm: str, seed: int) -> Path:
+        relative = Path(
+            f"fb-{mode}-threshold-{threshold:g}-{algorithm}-seed-{seed}-{args.credit_mode}"
+        ) / "aggregate_metrics.csv"
+        if args.supplemental_results_root is not None:
+            supplemental = args.supplemental_results_root / relative
+            if supplemental.is_file() and supplemental.with_name("metadata.json").is_file():
+                return supplemental
+        return args.results_root / relative
+
     files = [
         (
             mode,
             threshold,
             algorithm,
             seed,
-            args.results_root
-            / (
-                f"fb-{mode}-threshold-{threshold:g}-{algorithm}-seed-{seed}-"
-                f"{args.credit_mode}"
-            )
-            / "aggregate_metrics.csv",
+            result_path(mode, threshold, algorithm, seed),
         )
         for mode in args.feedback_modes
         for threshold in (
