@@ -1,0 +1,153 @@
+\section{Implementation and Performance Evaluation}
+\subsection{Software and reproducibility}
+The implementation targets Python 3.11 and uses SimPy, NumPy, Pandas,
+Matplotlib, PyYAML, PyTorch, and Gymnasium-compatible policy boundaries.
+The simulator/domain layers remain independent of Gymnasium and
+Stable-Baselines3. The final matched package verifies 52,110 per-task rows and
+90 aggregate replay rows, task IDs and arrivals, configuration hashes,
+workload/topology fingerprints, checkpoint metadata, and disjoint seed sets.
+The package and commands are documented in
+\texttt{docs/experiments/final-matched/README.md}; raw traces and large
+checkpoints remain outside Git.
+
+\subsection{Workload and protocol}
+The Alibaba 2017 adapter accepted 2,891 independent tasks: 1,734 training,
+578 validation, and 579 chronologically held-out test tasks. Arrival time is
+derived from \texttt{batch\_task.create\_timestamp}. Computational work is
+estimated from the mean work of valid completed instances using runtime, actual
+\texttt{real\_cpu\_avg}, and a configurable reference MIPS-per-core
+conversion; it is not a directly measured MI field. Multi-task jobs and
+incomplete/invalid instances are rejected, and DAG dependencies are not
+reconstructed.
+
+The final package uses the best-tier-calibrated deadline rule with a one-second
+floor and validation-calibrated arrival compression
+$0.12793575549650835$. Payload sizes, device assignment, device battery and
+radio state, wireless bandwidth and propagation, edge/cloud capacities, and
+relative deadlines are simulator assumptions. Accepted tasks are assigned
+round-robin to 24 devices and their configured edge associations. Alibaba is a
+production-cluster trace adapted to MEC, not a measured mobile-MEC workload.
+
+The primary comparison uses 579 tasks on the reference topology: 24 devices,
+three edges, and one cloud worker. Random, Greedy/FIFO, and Greedy/EDF are
+fixed baselines evaluated with noise seeds 10001--10005. Centralized DQN uses
+the five standard-DQN checkpoints from training seeds 42--46, observes global
+state, and uses fixed EDF cloud dispatch. Hierarchical DQN and hierarchical
+Double DQN use the ten frequent-feedback bundles at the same five training
+seeds; their cloud rules are learned. For learned policies, five noise runs
+are averaged within each training seed, then the mean and sample standard
+deviation are computed across five training-seed means. Baseline deviations
+are across the five noise seeds. P95 is computed per replay before
+aggregation, so these two SDs describe different variation sources.
+
+\subsection{Matched six-policy comparison}
+Table~\ref{tab:matched} is the primary result. Device energy is reported in
+joules per task using the package's \texttt{mean\_device\_energy\_j} metric;
+the denominator and aggregation follow the package summary. Values are
+descriptive means, not significance tests.
+
+\begin{table}[t]
+\centering
+\caption{Matched reference-topology comparison. Means $\pm$ SD; P95 is per
+replay before aggregation.}
+\label{tab:matched}
+\scriptsize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Policy & Deadline success (\%) & P95 latency (s) & Device energy (J/task)\\
+\midrule
+Random & $49.57\pm0.95$ & $137.96\pm16.46$ & $10.480\pm0.720$\\
+Greedy/FIFO & $75.79\pm0.78$ & $13.62\pm0.49$ & $0.211\pm0.001$\\
+Greedy/EDF & $75.89\pm0.86$ & $12.95\pm0.43$ & $0.211\pm0.001$\\
+Centralized DQN & $77.41\pm1.37$ & $15.71\pm4.44$ & $0.242\pm0.067$\\
+Hierarchical DQN & $74.63\pm0.79$ & $16.91\pm3.32$ & $0.260\pm0.104$\\
+Hierarchical Double DQN & $74.33\pm1.66$ & $15.08\pm2.85$ & $0.244\pm0.065$\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Additional metrics from the matched package. Means $\pm$ the
+package's corresponding SD; bytes are per 579-task replay.}
+\label{tab:matched-extra}
+\tiny
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Policy & Mean $L$ (s) & Data ($10^8$ B) & Feedback ($10^3$ B)\\
+\midrule
+Random & $22.002\pm2.681$ & $8.07\pm0.57\,10^8$ & $0$\\
+G/FIFO & $2.619\pm0.046$ & $12.86\pm0.12\,10^8$ & $0$\\
+G/EDF & $2.472\pm0.088$ & $12.86\pm0.12\,10^8$ & $0$\\
+C-DQN & $2.794\pm0.447$ & $12.54\pm0.68\,10^8$ & $0$\\
+H-DQN & $3.045\pm0.292$ & $12.72\pm1.08\,10^8$ & $35.4\pm0.7\,10^3$\\
+H-DDQN & $3.015\pm0.470$ & $12.04\pm0.42\,10^8$ & $35.1\pm0.6\,10^3$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:matched} visualizes the same documented summary. Centralized
+DQN has the highest mean success, while Greedy/EDF has the lowest mean P95.
+Greedy/FIFO and Greedy/EDF share the lowest mean energy. Both hierarchical
+learners improve on Random across all three headline metrics, while the
+reference comparison exposes different strengths for centralized control,
+heuristic scheduling, and hierarchy. Double DQN lowers mean P95 and energy
+relative to hierarchical DQN, with a small success decrease. These are
+descriptive comparisons, not claims of statistical significance.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/final_matched_comparison.pdf}
+\caption{Matched-policy means from the committed summary. Centralized DQN
+leads deadline success, Greedy/EDF leads P95 latency, and the two greedy
+policies lead device energy; lower is better for the latter two metrics.}
+\label{fig:matched}
+\end{figure}
+
+\subsection{Supporting feedback, topology, and cloud analyses}
+The older DQN/Double-DQN feedback study is separate from the matched
+six-policy comparison. It found reference-topology success means of 75.01\%,
+74.28\%, and 74.63\% for DQN under none, periodic, and frequent feedback,
+versus 73.39\%, 73.49\%, and 74.33\% for Double DQN. Double DQN had lower
+mean P95 for none and frequent feedback and lower energy in all three modes,
+but paired bootstrap intervals included zero. Held-out topology variants
+changed these relationships. At event threshold 0.5, Double DQN used 10,430
+feedback bytes per run versus 35,126 for frequent feedback, about 70\% less,
+with higher P95. The control messages have modeled bytes, delay, and
+information age, but do not contend with data-plane links.
+
+The cloud-rule ablation is also separate. With Double-DQN upstream weights on
+the reference topology, learned, EDF, SPT, and FIFO achieved
+74.33/15.08, 74.24/15.29, 74.82/12.36, and 73.90/17.82 for success
+(\%)/P95 (s). Fixed SPT was best on the reported aggregate metrics. Each
+checkpoint selected one rule whenever at least two jobs waited, indicating
+constant selection behavior under these contested-queue evaluations.
+
+\subsection{Reporting limitations}
+The matched package reports mean latency, P95 latency, deadline success,
+device energy, task communication bytes, and feedback bytes; Table~\ref{tab:matched-extra}
+adds the metrics not included in Table~\ref{tab:matched}. Device energy is
+the simulator's \texttt{mean\_device\_energy\_j}: total modeled device CPU
+and radio energy divided by the tasks in a replay, then aggregated according
+to the package's policy-specific seed procedure. It excludes idle,
+reception-infrastructure, retransmission, and cloud energy. The package's
+task communication bytes are data-plane payload bytes; feedback bytes are
+control-plane bytes. Feedback currently does not contend with data-plane
+links, so its communication cost should not be interpreted as queueing
+interference.
+
+Centralized DQN observes global state and therefore has an information
+advantage over the hierarchical policies; centralized state-collection
+traffic is not included in the communication accounting. The five evaluation
+seeds vary simulated bandwidth and service-time noise on one chronological
+test window, not five independent trace periods, and the five training seeds
+provide limited evidence. The reported standard deviations are descriptive
+and reflect different aggregation sources for fixed and learned policies.
+
+\subsection{Preliminary synthetic baseline}
+The earlier three-seed, ten-task development smoke experiment remains a
+simulator sanity check only. Its local, greedy/edge, cloud/EDF, and random
+mean latencies were 3.164, 0.602, 0.513, and 1.177 s, respectively. It is
+not statistically combined with the Alibaba-derived campaign.

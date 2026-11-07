@@ -1,0 +1,41 @@
+\section{Related Work}
+ETSI defines MEC as a distributed service environment close to the access
+network \cite{etsiMec003}. Offloading literature consequently studies coupled
+placement, queueing, wireless transmission, energy, and deadline decisions;
+the communication--energy trade-off is surveyed in \cite{mao2017drloffload}.
+This paper narrows the decision boundary deliberately: device, edge, and cloud
+controllers receive different local observations and expose small discrete
+action spaces rather than solving one global optimization problem.
+
+Simulation frameworks make different abstraction choices. EdgeCloudSim
+provides configurable edge-network and compute models
+\cite{sonmez2018edgecloudsim}; iFogSim models resource management in
+IoT/fog workflows \cite{gupta2017ifogsim}; and PureEdgeSim targets cloud,
+edge, and mist scenarios with broad extensibility
+\cite{pureedgesim}. The present implementation uses a compact SimPy model so
+that policy injection and the three decision boundaries remain explicit. It
+therefore offers a controlled experimental instrument, not a replacement for
+the richer mobility, application, and network models of those frameworks.
+
+Deep Q-learning established value-based control from replayed transitions
+\cite{mnih2015human}, while Double DQN separates action selection and target
+evaluation to reduce overestimation \cite{hasselt2016double}. Hierarchical and
+multi-agent MEC studies generally decompose placement or resource allocation
+across levels; federated reinforcement learning is a related future direction
+because it can distribute training without centralizing raw local experience.
+Hierarchical deep RL for joint caching and offloading similarly separates
+decisions across levels \cite{sun2024hierarchical}; federated deep RL
+aggregates policies learned from distributed environments \cite{zhuo2019federated};
+and centralized-training/decentralized-execution methods expose the
+information asymmetry that motivates local policy boundaries
+\cite{lowe2017multiagent}. These approaches often assume sequential
+environments, richer multi-agent interaction, or explicit model aggregation.
+The present campaign is more modest: it compares DQN and Double DQN adapters
+under matched simulator conditions and labels feedback and topology effects
+without claiming a universal hierarchy ranking.
+
+Alibaba Cluster Trace 2017 supplies production datacenter arrival and compute
+records \cite{alibaba2017}. It is not a mobile-MEC measurement. The adapter
+derives computational work from completed instances, while payloads, deadlines,
+device assignment, battery, and wireless links are declared simulation
+assumptions.
