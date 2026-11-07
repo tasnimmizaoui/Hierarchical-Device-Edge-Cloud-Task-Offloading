@@ -11,10 +11,9 @@ differs only for transitions that bootstrap. The two learners use the
 same episode cap and validation rule. Early stopping can result in
 different numbers of episodes.
 
-All 30 Double DQN conditions are complete. The DQN results below cover
-five matched seeds per mode for no, periodic and frequent feedback.
-The DQN event campaign is reported separately until each threshold
-has five evaluated checkpoints.
+Both algorithms have 30 complete training conditions. Each feedback
+mode or trained event threshold has five matched seeds. Event results
+below compare checkpoints at their trained threshold.
 
 | Feedback | DQN success | Double DQN success | DQN P95 | Double DQN P95 | DQN device energy | Double DQN device energy |
 |---|---:|---:|---:|---:|---:|---:|
@@ -76,17 +75,25 @@ noise runs per seed on the reference topology.
 
 | Threshold | Algorithm | Success | P95 | Device energy per task | Feedback bytes per run | Mean feedback age |
 |---|---|---:|---:|---:|---:|---:|
+| 0.1 | DQN | 75.74% | 18.84 s | 0.241 J | 11,864 | 69.34 s |
+| 0.1 | Double DQN | 74.29% | 17.00 s | 0.212 J | 11,528 | 70.82 s |
 | 0.25 | DQN | 73.07% | 16.61 s | 0.234 J | 11,988 | 65.54 s |
 | 0.25 | Double DQN | 74.95% | 17.46 s | 0.271 J | 11,087 | 69.37 s |
 | 0.5 | DQN | 74.75% | 16.74 s | 0.329 J | 10,687 | 67.97 s |
 | 0.5 | Double DQN | 74.98% | 17.80 s | 0.213 J | 10,431 | 68.80 s |
 
-At threshold 0.25, the paired Double DQN minus DQN difference is
+At threshold 0.1, the paired Double DQN minus DQN differences are
+−1.45 percentage points in success (descriptive 95% bootstrap
+interval −2.49 to −0.51) and −1.83 s in P95 (−7.48 to +2.91).
+At 0.25, the paired difference is
 +1.88 percentage points in success (descriptive 95% bootstrap
 interval +0.37 to +3.25) and +0.85 s in P95 (−1.80 to +3.48).
 At 0.5, the differences are +0.23 points (−1.18 to +1.68) and
 +1.05 s (−0.54 to +2.76). Feedback age is averaged over snapshots
 consumed at decisions.
+The success advantage changes direction between thresholds 0.1 and
+0.25. The P95 intervals all include zero. The consolidated table is
+in `results/feedback-ablation/summary_matched.csv`.
 
 ## Cloud rule ablation on sequential-credit checkpoints
 
@@ -121,7 +128,8 @@ The replay uses `compare_integrated_policies.py --cloud-rule-ablation`,
 with feedback mode `frequent` and evaluation seeds 10001 to 10005.
 Outputs are under `results/cloud-rule-sequential/`, one folder per
 algorithm and training seed. The learned rule counts are in
-`cloud_contested_actions.csv`.
+`cloud_contested_actions.csv`. The aggregate across the five
+topologies is in `results/cloud-rule-sequential/summary.csv`.
 
 | Frozen upstream weights | Cloud rule | Reference success | Reference P95 | Combined stress success | Combined stress P95 |
 |---|---|---:|---:|---:|---:|
@@ -313,7 +321,8 @@ separate. After the requested runs finish, create the reference-topology table:
   --results-root results\feedback-ablation `
   --feedback-modes none periodic frequent event `
   --event-thresholds 0.1 0.25 0.5 `
-  --algorithms double-dqn `
+  --algorithms dqn double-dqn `
+  --matched-event-only `
   --seeds 42 43 44 45 46 `
   --credit-mode next-decision |
   Out-File results\feedback-ablation\summary.csv -Encoding utf8
@@ -331,3 +340,7 @@ Use `--algorithms dqn double-dqn --matched-event-only` to retain
 each event checkpoint's trained threshold when replay grids differ.
 The summarizer checks the remaining configuration and requires one
 matched event result per evaluation noise seed.
+The main campaign now contains all five DQN seeds at threshold 0.1.
+Its aggregate CSVs for seeds 45 and 46 are identical to the separately
+launched copies in `results/feedback-event-completion`. The command
+above uses the main campaign alone.
