@@ -1,7 +1,7 @@
-"""Five-policy SimPy comparison plus causal-feedback ablations on held-out seeds.
+"""Compare SimPy policies on synthetic scenarios or held-out Alibaba 2017 tasks.
 
-Development experiments use synthetic tasks and one device/edge/cloud only.
-Do NOT cite outputs as evidence of improvements on a public trace.
+With --source alibaba2017, every policy uses the same test workload and a
+fresh backend built from --topology-config for the current topology variant.
 """
 from __future__ import annotations
 
