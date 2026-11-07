@@ -1,0 +1,381 @@
+{
+  "scenario": "alibaba2017_test",
+  "tasks_per_run": 579,
+  "training_seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "evaluation_noise_seeds": [
+    10001,
+    10002,
+    10003,
+    10004,
+    10005
+  ],
+  "policies": [
+    "random",
+    "greedy_fifo",
+    "greedy_edf",
+    "centralized_dqn",
+    "hierarchical_dqn",
+    "hierarchical_double_dqn"
+  ],
+  "task_rows": 52110,
+  "aggregate_rows": 90,
+  "centralized_algorithm": "dqn",
+  "baseline_handling": "Identical outputs checked across all source bundles and kept once per noise seed.",
+  "training_configuration_except_algorithm": {
+    "episodes": 1000,
+    "tasks_per_episode": 100,
+    "source": "alibaba2017",
+    "deadline_policy": "best-tier-calibrated",
+    "topology_augmentation": "sweep",
+    "training_window": "sampled",
+    "max_trace_tasks": 5000,
+    "scenarios": [
+      "nominal",
+      "high_load",
+      "congested_network"
+    ],
+    "learn_cloud": true,
+    "gamma": 0.9,
+    "arrival_compression": 0.12793575549650835,
+    "calibrate_on_validation": true,
+    "credit_mode": "next-decision",
+    "exploration_schedule": "linear-episode-75pct",
+    "epsilon_start": 0.9,
+    "epsilon_end": 0.05,
+    "epsilon_decay_fraction": 0.75,
+    "batch_size": 32,
+    "replay_capacity": 8000,
+    "validation_tasks": 578,
+    "validation_seeds": [
+      100001,
+      100002,
+      100003,
+      100004,
+      100005
+    ],
+    "validation_selection": "deadline-p95",
+    "validation_every": 25,
+    "patience": 8,
+    "reward_weights": [
+      0.35,
+      0.25,
+      0.35,
+      0.05
+    ],
+    "feedback": "frequent",
+    "feedback_frequency": 5,
+    "event_threshold": 0.25,
+    "workload_fingerprints": {
+      "trace_sha256": "50f3c50ab4a917ad06c1cee6ec601e1356708774d7962503e8eafdd720b2286d",
+      "instances_sha256": "195f25ef36484a2da9bb92c08e203224ed34a32f48fcbe11c01d94ecf308d817",
+      "topology_sha256": "304330ceab4dcb5046e7667efabf26716c0e7b78a907606662fa28726a663315"
+    }
+  },
+  "evaluation_configuration_except_algorithm_and_training_hash": {
+    "source": "alibaba2017",
+    "deadline_policy": "best-tier-calibrated",
+    "arrival_compression": 0.12793575549650835,
+    "test_seeds": [
+      10001,
+      10002,
+      10003,
+      10004,
+      10005
+    ],
+    "tasks": 5000,
+    "scenarios": [
+      "alibaba2017_test",
+      "alibaba2017_test:cloud_cpu_high",
+      "alibaba2017_test:device_edge_link_fast",
+      "alibaba2017_test:edge_cloud_link_fast",
+      "alibaba2017_test:combined_stress"
+    ],
+    "workload_fingerprints": {
+      "trace_sha256": "50f3c50ab4a917ad06c1cee6ec601e1356708774d7962503e8eafdd720b2286d",
+      "instances_sha256": "195f25ef36484a2da9bb92c08e203224ed34a32f48fcbe11c01d94ecf308d817",
+      "topology_sha256": "304330ceab4dcb5046e7667efabf26716c0e7b78a907606662fa28726a663315"
+    },
+    "fixed_cloud_edf": false,
+    "cloud_rule_ablation": false,
+    "feedback_modes": [
+      "frequent"
+    ],
+    "feedback_frequency": 5,
+    "event_thresholds": [
+      0.1,
+      0.25,
+      0.5
+    ],
+    "training_feedback": "frequent",
+    "training_event_threshold": 0.25,
+    "test_deadline_floor": null
+  },
+  "topology": {
+    "devices": [
+      "device-1",
+      "device-2",
+      "device-3",
+      "device-4",
+      "device-5",
+      "device-6",
+      "device-7",
+      "device-8",
+      "device-9",
+      "device-10",
+      "device-11",
+      "device-12",
+      "device-13",
+      "device-14",
+      "device-15",
+      "device-16",
+      "device-17",
+      "device-18",
+      "device-19",
+      "device-20",
+      "device-21",
+      "device-22",
+      "device-23",
+      "device-24"
+    ],
+    "edges": [
+      "edge-1",
+      "edge-2",
+      "edge-3"
+    ],
+    "device_to_edge": {
+      "device-1": "edge-1",
+      "device-2": "edge-2",
+      "device-3": "edge-3",
+      "device-4": "edge-1",
+      "device-5": "edge-2",
+      "device-6": "edge-3",
+      "device-7": "edge-1",
+      "device-8": "edge-2",
+      "device-9": "edge-3",
+      "device-10": "edge-1",
+      "device-11": "edge-2",
+      "device-12": "edge-3",
+      "device-13": "edge-1",
+      "device-14": "edge-2",
+      "device-15": "edge-3",
+      "device-16": "edge-1",
+      "device-17": "edge-2",
+      "device-18": "edge-3",
+      "device-19": "edge-1",
+      "device-20": "edge-2",
+      "device-21": "edge-3",
+      "device-22": "edge-1",
+      "device-23": "edge-2",
+      "device-24": "edge-3"
+    },
+    "cloud_cpu_capacity_mips": 20000.0
+  },
+  "source_runs": [
+    {
+      "run": "fb-frequent-threshold-0.25-dqn-seed-42-next-decision",
+      "training_seed": 42,
+      "algorithm": "dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "589269fe7b08ae85b6cb2eb79f22a7d116d143d0fa20296fa07529f52344daa0",
+      "evaluation_configuration_hash": "7ec2e85cd33ff01dfe895de4de0705816772b77d9fb28dfe4e973f8e28d54cc5",
+      "episodes_completed": 650,
+      "selected_episodes": {
+        "hierarchical": 450,
+        "centralized": 275
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-dqn-seed-43-next-decision",
+      "training_seed": 43,
+      "algorithm": "dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "589269fe7b08ae85b6cb2eb79f22a7d116d143d0fa20296fa07529f52344daa0",
+      "evaluation_configuration_hash": "7ec2e85cd33ff01dfe895de4de0705816772b77d9fb28dfe4e973f8e28d54cc5",
+      "episodes_completed": 525,
+      "selected_episodes": {
+        "hierarchical": 225,
+        "centralized": 325
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-dqn-seed-44-next-decision",
+      "training_seed": 44,
+      "algorithm": "dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "589269fe7b08ae85b6cb2eb79f22a7d116d143d0fa20296fa07529f52344daa0",
+      "evaluation_configuration_hash": "7ec2e85cd33ff01dfe895de4de0705816772b77d9fb28dfe4e973f8e28d54cc5",
+      "episodes_completed": 700,
+      "selected_episodes": {
+        "hierarchical": 350,
+        "centralized": 500
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-dqn-seed-45-next-decision",
+      "training_seed": 45,
+      "algorithm": "dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "589269fe7b08ae85b6cb2eb79f22a7d116d143d0fa20296fa07529f52344daa0",
+      "evaluation_configuration_hash": "7ec2e85cd33ff01dfe895de4de0705816772b77d9fb28dfe4e973f8e28d54cc5",
+      "episodes_completed": 450,
+      "selected_episodes": {
+        "hierarchical": 250,
+        "centralized": 125
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-dqn-seed-46-next-decision",
+      "training_seed": 46,
+      "algorithm": "dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "589269fe7b08ae85b6cb2eb79f22a7d116d143d0fa20296fa07529f52344daa0",
+      "evaluation_configuration_hash": "7ec2e85cd33ff01dfe895de4de0705816772b77d9fb28dfe4e973f8e28d54cc5",
+      "episodes_completed": 500,
+      "selected_episodes": {
+        "hierarchical": 250,
+        "centralized": 300
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-double-dqn-seed-42-next-decision",
+      "training_seed": 42,
+      "algorithm": "double-dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "d8ea016277ae40a9ea563d61ef3e97f87a922b12d1cd7e9600899c5a4ab8b798",
+      "evaluation_configuration_hash": "2b77f88ee31871de0c5bc1df4d90b301f23eb60de29c3ad7a015d01eb5e43827",
+      "episodes_completed": 950,
+      "selected_episodes": {
+        "hierarchical": 750,
+        "centralized": 750
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-double-dqn-seed-43-next-decision",
+      "training_seed": 43,
+      "algorithm": "double-dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "d8ea016277ae40a9ea563d61ef3e97f87a922b12d1cd7e9600899c5a4ab8b798",
+      "evaluation_configuration_hash": "2b77f88ee31871de0c5bc1df4d90b301f23eb60de29c3ad7a015d01eb5e43827",
+      "episodes_completed": 525,
+      "selected_episodes": {
+        "hierarchical": 325,
+        "centralized": 250
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-double-dqn-seed-44-next-decision",
+      "training_seed": 44,
+      "algorithm": "double-dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "d8ea016277ae40a9ea563d61ef3e97f87a922b12d1cd7e9600899c5a4ab8b798",
+      "evaluation_configuration_hash": "2b77f88ee31871de0c5bc1df4d90b301f23eb60de29c3ad7a015d01eb5e43827",
+      "episodes_completed": 300,
+      "selected_episodes": {
+        "hierarchical": 100,
+        "centralized": 100
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-double-dqn-seed-45-next-decision",
+      "training_seed": 45,
+      "algorithm": "double-dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "d8ea016277ae40a9ea563d61ef3e97f87a922b12d1cd7e9600899c5a4ab8b798",
+      "evaluation_configuration_hash": "2b77f88ee31871de0c5bc1df4d90b301f23eb60de29c3ad7a015d01eb5e43827",
+      "episodes_completed": 475,
+      "selected_episodes": {
+        "hierarchical": 75,
+        "centralized": 275
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    },
+    {
+      "run": "fb-frequent-threshold-0.25-double-dqn-seed-46-next-decision",
+      "training_seed": 46,
+      "algorithm": "double-dqn",
+      "observation_version": "simpy-v9-cloud-queue-signals",
+      "reward_version": "feasibility-aware-energy-cloud-queue-cost-v5",
+      "training_configuration_hash": "d8ea016277ae40a9ea563d61ef3e97f87a922b12d1cd7e9600899c5a4ab8b798",
+      "evaluation_configuration_hash": "2b77f88ee31871de0c5bc1df4d90b301f23eb60de29c3ad7a015d01eb5e43827",
+      "episodes_completed": 725,
+      "selected_episodes": {
+        "hierarchical": 525,
+        "centralized": 350
+      },
+      "checkpoints": [
+        "device.pt",
+        "edge.pt",
+        "cloud.pt",
+        "centralized.pt"
+      ]
+    }
+  ]
+}
