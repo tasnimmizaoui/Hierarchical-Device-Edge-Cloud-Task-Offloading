@@ -5,12 +5,15 @@
 \usepackage{graphicx}
 \usepackage{microtype}
 \usepackage{url}
-\usepackage{balance}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\input{glyphtounicode}
+\pdfgentounicode=1
 
 \title{Hierarchical Device--Edge--Cloud Task Offloading:\\
 An Experimental Study of DQN, Double DQN, Feedback, and Cloud Scheduling}
 
-\author{\IEEEauthorblockN{Tasnim Mizaoui, Farah Cherif, Farah Cherif, and Doua Bousnina}
+\author{\IEEEauthorblockN{Tasnim Mizaoui, Farah Cherif, and Doua Bousnina}
 \IEEEauthorblockA{INSAT, Tunis, Tunisia\\
 }}
 
@@ -49,7 +52,7 @@ discrete-event simulation, Double-DQN, reproducibility
 \input{sections/implementation}
 \input{sections/conclusion}
 
-\balance
 \bibliographystyle{IEEEtran}
+\IEEEtriggeratref{9}
 \bibliography{references}
 \end{document}

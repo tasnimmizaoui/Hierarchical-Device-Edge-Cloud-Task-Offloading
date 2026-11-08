@@ -13,7 +13,8 @@ The decision boundaries are shown in Fig.~\ref{fig:architecture}.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/architecture.pdf}
-\caption{Implemented device--edge--cloud decision boundaries.}
+\caption{Decision paths for the three agents. The device and edge can
+execute at their own tier or escalate. The cloud chooses the service rule.}
 \label{fig:architecture}
 \end{figure}
 
@@ -35,7 +36,8 @@ illustrates these paths.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/task_lifecycle.pdf}
-\caption{Task lifecycle through queues, links, execution, and result return.}
+\caption{Event order for the local, edge and cloud routes. Wait denotes
+the compute queue. Transfers can also incur link queueing.}
 \label{fig:lifecycle}
 \end{figure}
 
@@ -64,19 +66,61 @@ delayed edge-congestion signal. Its actions are local execution and edge
 offloading. The edge observes task demand and deadline, edge queue/utilization,
 edge capacity, edge--cloud link state, and an optional delayed cloud signal.
 Its actions are edge execution and cloud forwarding. The cloud observes queue
-length, deadline summaries, estimated service time, and oldest wait; its
-actions are EDF, SPT, and FIFO. A centralized comparator uses a 15-feature
+length, deadline summaries, estimated service time, oldest wait, the count
+of near-deadline jobs and workload imbalance. Device, edge and cloud use
+11, 10 and 11 features. Work is log-scaled to compress its heavy tail.
+The cloud chooses EDF (earliest absolute deadline), SPT (shortest
+estimated service), or FIFO (first arrival to the cloud queue).
+A centralized comparator uses a 16-feature
 global observation and selects device, edge, or cloud, with fixed EDF cloud
 dispatch. Lower-tier hierarchical agents do not receive raw global state.
 
 \subsection{Learning and reward}
+Q-learning estimates how much reward an agent can expect from an
+action and the decisions that follow. For a policy $\pi$, the
+action value is
+\begin{equation}
+Q^\pi(s,a)=
+\mathbb E_\pi\!\left[\sum_{k=0}^{\infty}\gamma^k r_{t+k}
+\mid s_t=s,\ a_t=a\right].
+\end{equation}
+Here $s$ is the observation used for control, $a$ is the action,
+and $r_t$ is the reward assigned to the current decision. A
+tabular Q-learning update adjusts the value of the observed pair
+toward a target that combines the immediate reward and the best
+estimated next action \cite{watkins1992}.
+\begin{equation}
+Q(s,a)\leftarrow Q(s,a)+
+\alpha\left[r+\gamma\max_bQ(s',b)-Q(s,a)\right].
+\end{equation}
+The learning rate $\alpha$ controls the correction. At episode
+termination the future term is zero.
+
+Our observations include continuous quantities such as remaining
+deadline, battery and queue wait. A table would require discretizing
+their combinations. Deep Q-learning approximates $Q(s,a)$ with a
+neural network. A Deep Q-Network (DQN) returns one score per
+discrete action in a single pass. Fig.~\ref{fig:qnetwork} shows the
+architecture used at each tier. The controller explores during
+training and chooses the highest-scoring action during evaluation.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/q_network.pdf}
+\caption{DQN architecture shared by design across the three tiers.
+Each controller has its own learned weights and input/output sizes.}
+\label{fig:qnetwork}
+\end{figure}
+
 The DQN and Double DQN agents use two hidden layers of 64 units, replay
 capacity 8,000, batch size 32, learning rate $3\mathord{\times}10^{-4}$,
 target updates every 500 optimization steps, and Smooth L1 loss. Double DQN
 selects the next action with the online network and evaluates it with the
-target network; DQN takes the target-network maximum.
+target network. DQN takes the target-network maximum. Splitting selection
+and evaluation addresses the upward bias that can arise when choosing
+the largest of several noisy estimates \cite{hasselt2016double}.
 
-For non-cloud decisions, the shared terminal reward is
+For non-cloud decisions, the shared task reward is
 \begin{equation}
 \begin{aligned}
 R=-\bigg(&w_l\min\left(1,\frac{\log(1+L/D)}{\log(10001)}\right)
@@ -90,36 +134,48 @@ $F$ denote end-to-end latency in seconds, deadline in seconds, device energy
 in joules, and feedback bytes. The implementation uses $E_0=0.3$ J and
 $F_0=64$ bytes from the default \texttt{RewardWeights} configuration; these
 are normalization references, not measured campaign means. The miss indicator
-is one when a deadline-feasible task misses its deadline. The cloud uses a
+is one when a deadline-feasible task misses its deadline. These weights
+are design choices that trade off latency, device energy, feasible
+deadline misses and feedback cost in a common scalar. The logarithm
+compresses large latency ratios. In $\log(10001)$, the number 10,001
+is $1+10{,}000$. At $L/D=10{,}000$, the normalized latency penalty
+reaches one, and clipping caps it there. For example, with $L=2$ s,
+$D=1$ s, $E=0.15$ J, $F=32$ B and a nominally feasible deadline, the
+four weighted penalties are about 0.042, 0.125, 0.350 and 0.025.
+The reward is their negative sum, approximately $-0.542$.
+The cloud uses a
 queue-waiting-cost reward for contested dispatches, so its objective is not
 identical to the shared task reward.
 
-The implementation is not a complete sequential multi-agent Gymnasium
-environment. Device and edge decisions receive terminal per-task credit. The
-RL campaign's cloud controller additionally uses next-decision credit with
-$\gamma=0.9$ across contested dispatch decisions; singleton cloud queues are
-omitted because all three rules select the same job. Fig.~\ref{fig:rl}
-summarizes the distinction.
+The task reward is computed after completion and assigned to the decisions
+on its route. The evaluated protocol links consecutive observations in each
+controller's decision log, with $\gamma=0.9$ and a terminal transition
+at the end of the log. Consecutive decisions can concern different tasks.
+For reward $r$ and next observation $s'$, DQN uses
+$y=r+\gamma\max_a Q_{\mathrm{target}}(s',a)$.
+Double DQN selects $a^*=\arg\max_a Q_{\mathrm{online}}(s',a)$ and uses
+$y=r+\gamma Q_{\mathrm{target}}(s',a^*)$. Both use $y=r$ at the final
+transition.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/hierarchical_rl.pdf}
-\caption{Local observations and terminal or next-decision credit.}
-\label{fig:rl}
-\end{figure}
-
+The cloud reward is $-\min\{1,\log(1+n\hat t)/\log(10001)\}$,
+where $n$ is the queue size at dispatch and $\hat t$ is the estimated
+service duration in seconds. This proxy for queue occupancy during
+service favors shorter jobs at a given queue size. Singleton queues are
+omitted from cloud replay because the three rules select the same job.
 \subsection{Feedback}
 Feedback is adjacent-tier and causal. A snapshot sampled at time $t$ is
 available only after modeled propagation and serialization, at a later
 decision. Conditions are none, periodic, frequent, and event-triggered. The
 event trigger sends an initial snapshot, sends when the signal change reaches a
 threshold, and refreshes after five observations. Feedback bytes, modeled
-delay, and information age are recorded, but messages do not contend with
-data-plane links. Fig.~\ref{fig:coordination} shows this control path.
+delay, and information age are recorded. At a decision, information age is
+the elapsed time since the consumed snapshot was sampled \cite{yatesAoI}.
+The modeled control path operates independently of data-plane queues. Fig.~\ref{fig:coordination} shows this control path.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/coordination.pdf}
-\caption{Causal adjacent-tier feedback with a non-blocking control plane.}
+\caption{Timing of a queue snapshot sent to the neighboring tier.
+Information age is measured from sampling to the decision that uses it.}
 \label{fig:coordination}
 \end{figure}

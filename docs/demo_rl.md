@@ -1,77 +1,24 @@
-# Démonstration fonctionnelle du projet MEC
+# Démonstration interactive du projet MEC
 
-Prévoir cinq à six minutes. Préparer deux fenêtres dans le dossier du dépôt,
-un terminal PowerShell et le tableau de bord Streamlit. Les checkpoints et
-les CSV sont des artefacts locaux. Vérifier leur présence sur la machine de
-soutenance avant la séance.
-
-## 1. Exécution en direct (1 minute)
+Depuis la racine du dépôt, ouvrir l’application une fois.
 
 ```powershell
-.venv/Scripts/python.exe scripts/run_simulation_smoke.py
+.\.venv\Scripts\python.exe -m streamlit run web_app.py
 ```
 
-Montrer les routes device, device–edge et device–edge–cloud avec les mêmes
-trois tâches synthétiques. Lire une ligne de sortie et expliquer les mesures
-de latence, énergie et octets. Cette vérification exécute réellement SimPy.
-Pour montrer l'inférence à trois agents en direct, préparer ce rejeu de
-validation technique dans un deuxième terminal. L'analyse complète de
-l'article utilise les 579 tâches.
+Ouvrir http://localhost:8501. Les réglages, le lancement et l’exploration se font ensuite dans l’application.
 
-```powershell
-.venv/Scripts/python.exe scripts/compare_integrated_policies.py --source alibaba2017 --deadline-policy best-tier-calibrated --feedback frequent --tasks 100 --max-trace-tasks 5000 --seeds 10001 --models artifacts/models/cloud-pilot-learned/fb-frequent-seed-42-terminal --output results/demo-live
-```
+## Montrer l’effet de la charge
 
-Le chargement de la trace peut prendre du temps même avec 100 tâches
-évaluées. Lancer cette commande avant d'ouvrir les onglets du tableau de bord
-et revenir à sa sortie à la fin. Le tirage réduit sert à la démo.
+1. Dans **Simuler**, choisir **Simulation synthétique**, saisir **20** requêtes et garder la charge normale. Lancer la simulation.
+2. Comparer les échéances respectées et la latence P95. Dans **Suivre une requête**, passer de **Tout sur l’appareil** à **Tout sur l’edge**, puis au cloud EDF.
+3. Garder la même graine, passer à **100** requêtes et choisir **Arrivées rapprochées**. Relancer et regarder comment l’attente et les échéances évoluent. Pour isoler l’effet d’un seul réglage, faire deux essais en ne modifiant que ce réglage.
 
-## 2. Tableau de bord (3 minutes)
+## Comparer les modèles RL
 
-```powershell
-.venv/Scripts/python.exe -m streamlit run web_app.py
-```
+1. Choisir **Trace Alibaba et modèles RL**, choisir **Double DQN** et la coordination **À chaque décision**, saisir **100** requêtes et lancer la simulation. Le chargement des traces locales peut prendre du temps. Les modèles sont déjà entraînés.
+2. Dans **Scénario affiché**, garder **Alibaba · test** pour la topologie de référence. Comparer le RL hiérarchique, le RL centralisé et les heuristiques.
+3. Pour isoler la décision du cloud, cocher **Comparer aussi les règles cloud EDF, SPT et FIFO** et relancer. Les règles fixes utilisent les mêmes modèles appareil et edge.
+4. Exporter les mesures depuis **Exporter les résultats**. L’espace **Résultats archivés** donne accès aux analyses et journaux enregistrés.
 
-Dans la barre latérale, vérifier les chemins du pilote à trois agents.
-
-| Champ | Valeur à saisir |
-|---|---|
-| Dossier de comparaison | `results/cloud-pilot-learned/fb-frequent-seed-42-terminal` |
-| Dossier du modèle | `artifacts/models/cloud-pilot-learned/fb-frequent-seed-42-terminal` |
-
-1. **Comparaison.** Choisir `alibaba2017_test`. Montrer la politique
-   hiérarchique, le DQN centralisé et le greedy. Expliquer la différence
-   d'information entre le greedy global et le greedy retardé.
-2. **Entraînement RL.** Choisir l'agent `cloud`. Montrer les actions
-   EDF/SPT/FIFO et expliquer la différence entre exploration et évaluation.
-3. **Parcours des tâches.** Choisir `hierarchical_frequent` et la graine
-   `10001`. Suivre une tâche jusqu'au cloud. Montrer sa deadline, son
-   énergie et sa latence à partir du résultat enregistré.
-4. **Coordination.** Ouvrir `results/feedback-ablation/fb-event-seed-42-terminal`
-   dans le champ de comparaison pour montrer le mode événementiel. Pour
-   comparer les quatre modes sur les trois graines, afficher le graphique
-   du rapport. Le tableau de bord lit un seul dossier à la fois.
-
-L'interface lit les CSV et les journaux sauvegardés. À la fin du rejeu,
-renseigner `results/demo-live` pour montrer les résultats produits devant
-le jury. Garder les résultats complets ouverts dans le PDF si le rejeu
-prend plus de temps.
-
-## 3. Résultat à expliquer (1 minute)
-
-Ouvrir le tableau de l'ablation cloud à poids amont gelés. Sur la
-référence, le P95 passe de 19,87 s avec EDF à 15,64 s avec le DQN.
-SPT fixe atteint 15,61 s. Le graphique des actions montre que deux
-checkpoints choisissent toujours SPT quand plusieurs tâches attendent
-et le troisième toujours FIFO. Terminer par le graphique coût–deadline
-du feedback événementiel. La baisse de 69 % concerne les messages de
-coordination RL. Le greedy retardé reste devant en taux de succès brut.
-
-Préparer la réponse à trois questions du jury.
-
-- **D'où viennent les données ?** Arrivées et calcul dérivés du trace
-  Alibaba. Charges réseau, deadlines et topologie sont paramétrées.
-- **Où intervient le cloud ?** Il choisit une règle d'ordre de service
-  pour une file partagée. Le modèle possède un seul exécuteur.
-- **Comment isoler son effet ?** Rejouer EDF et DQN avec le même
-  checkpoint amont, les mêmes tâches et les mêmes perturbations.
+Le nombre saisi s’applique à chaque stratégie et scénario. Les arrivées et le calcul du mode Alibaba dérivent de la trace. Le réseau et les échéances reposent sur les hypothèses du simulateur.

@@ -1,8 +1,5 @@
-"""Interactive *read-only* dashboard for reproducible SimPy CSV experiments.
+"""Streamlit entry point for live experiments and archived results."""
 
-Run: streamlit run web_app.py
-No metrics are generated, interpolated or manually fabricated by this UI.
-"""
 from __future__ import annotations
 
 import json
@@ -10,8 +7,14 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from demo_dashboard import show_demo
 
 st.set_page_config(page_title="MEC · Device / Edge / Cloud", layout="wide", page_icon="☁️")
+page = st.sidebar.radio("Espace", ("Simuler", "Résultats archivés"))
+if page == "Simuler":
+    show_demo()
+    st.stop()
+
 st.title("☁️ Offloading Device → Edge → Cloud/HPC")
 st.caption("Projet 05 · Futurs réseaux mobiles · Résultats de simulation")
 

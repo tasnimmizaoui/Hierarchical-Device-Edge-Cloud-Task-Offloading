@@ -15,7 +15,7 @@ from mec_offloading.workloads import generate_synthetic_tasks
 
 def main() -> None:
     backend = SimPyBackend()
-    tasks = generate_synthetic_tasks(count=3, seed=7)
+    tasks = generate_synthetic_tasks(count=100, seed=1001)
     scenarios = (
         ("local", LocalOnlyPolicy(), EdgeExecutePolicy()),
         ("edge", AlwaysEdgePolicy(), EdgeExecutePolicy()),
