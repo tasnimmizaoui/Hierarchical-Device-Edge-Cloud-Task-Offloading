@@ -6,6 +6,13 @@ backward compatibility. `TopologyConfig` can instead define multiple devices,
 multiple edges, and a fixed device-to-edge association while all edges share
 one cloud scheduler.
 
+The reproducible topology demonstration uses three devices, two Edge servers,
+and one shared Cloud worker. The Alibaba/RL reference experiments use the
+versioned topology in `configs/alibaba-multi-topology.yaml`: 24 devices, three
+Edge servers, and one shared Cloud worker. In both cases, the Cloud scheduler
+has one modeled execution slot; a multi-worker HPC cluster is outside the
+current scope.
+
 ```mermaid
 flowchart TD
     T[Task arrives at device] --> D[Device policy / RL agent]
@@ -83,18 +90,22 @@ python scripts/run_scenario_validation.py configs/cloud-contention.yaml
 
 ## Configurable topology
 
+The demonstration topology contains:
+
 ```text
 device-1 ─┐
 device-2 ─┼──> edge-1 ─┐
-device-3 ─┘           ├──> shared cloud scheduler
-                      └──> edge-2
+device-3 ─┘           ├──> one shared Cloud worker
+                       └──> edge-2
 ```
 
-Each device owns a CPU resource and battery ledger. Each edge owns a CPU
-resource, queue, and device/cloud links. Devices may share an edge queue.
-Cloud jobs carry the originating edge ID, so one scheduler can compare jobs
-from both edges. The association is configured explicitly; the device policy
-can only choose local execution or its assigned edge.
+The Alibaba/RL reference topology scales the same ownership model to 24
+devices associated with three Edge servers. Each device owns a CPU resource
+and battery ledger. Each Edge owns a CPU resource, queue, and device/Cloud
+links. Devices may share an Edge queue. Cloud jobs carry the originating Edge
+ID, so one scheduler can compare jobs from all Edge servers. The association
+is configured explicitly; the device policy can only choose local execution
+or its assigned Edge.
 
 ## Decision boundaries
 
@@ -103,6 +114,10 @@ can only choose local execution or its assigned edge.
 - Cloud schedules the tasks that arrive from edge nodes.
 - Each agent sees only its permitted local observation plus deliberately defined feedback fields. Do not pass global state to lower agents in the hierarchical variant.
 - Model device-edge and edge-cloud links separately, including uplink and result-return/downlink traffic if available.
+- Feedback messages are delivered with modeled serialization and propagation
+  delay, but do not reserve the data-plane link or block task execution. This
+  preserves causal feedback timing without modeling full control/data-plane
+  network contention.
 - A deadline is a duration from arrival, not an absolute timestamp in the input.
 - The current workload contains independent tasks. DAG tasks are not yet
   implemented.

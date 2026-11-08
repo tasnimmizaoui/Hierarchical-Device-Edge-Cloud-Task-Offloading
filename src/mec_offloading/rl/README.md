@@ -1,20 +1,18 @@
-# Étudiante 2 — RL intégré V2
+# Integrated reinforcement learning
 
-- `dqn.py` : Double-DQN, replay, target network, checkpoints, loss logs.
-- `credit.py` : récompense multi-objectif, attribution *terminale* par tâche.
-- `observations.py` + `spaces.py` : vecteurs locaux normalisés et contrat
-  d'observation/action pour chaque agent.
-- `policies.py` + `integrated.py` : agents Device/Edge/Cloud et centralisé,
-  raccordés au backend SimPy de l'étudiante 1.
-- `scenarios.py` : variations synthétiques temporaires de charge et réseau.
-- `envs/device_mock_env.py` : ancien smoke test Gymnasium, **ne pas utiliser**
-  pour valider les performances du projet.
+- `dqn.py`: Double-DQN, replay, target network, checkpoints, and loss logs.
+- `credit.py`: multi-objective rewards and terminal per-task attribution.
+- `observations.py` and `spaces.py`: normalized local observations and the
+  observation/action contract for each agent.
+- `policies.py` and `integrated.py`: Device, Edge, Cloud, and centralized
+  adapters connected to the canonical SimPy backend.
+- `scenarios.py`: temporary synthetic load and network variations.
+- `envs/device_mock_env.py`: legacy Gymnasium smoke test; do not use it for
+  project performance results.
 
-Les transitions intégrées sont **terminales** (un choix par tâche). Un vrai
-`gymnasium.Env` multi-étapes reste un travail d'interface avec l'étudiante 1.
-Voir `docs/ETUDIANTE_2_V2_FR.md`.
-This package belongs to Student 2. It contains Gymnasium environments, RL
-adapters, training utilities, and the centralized RL comparison.
+The integrated transition formulation makes one routing or scheduling decision
+per task. Terminal and next-decision credit modes are available; this is not a
+multi-step `gymnasium.Env`.
 
 ## Current status
 
@@ -22,13 +20,18 @@ adapters, training utilities, and the centralized RL comparison.
 latencies, and energy values are synthetic proxies and must not appear as
 project evaluation results.
 
-The integrated RL work should implement:
+The integrated workflow implements:
 
 1. device decisions: local execution or edge offloading;
 2. edge decisions: edge execution or cloud forwarding;
 3. cloud scheduling: EDF, shortest-processing-time, or FIFO rule selection;
 4. hierarchical coordination and feedback;
 5. a centralized RL baseline for comparison.
+
+The training and comparison scripts can use synthetic scenarios or Alibaba
+2017 tasks with an explicit multi-device topology. The centralized policy is a
+comparison policy with global observations; it is not one of the separate
+hierarchical agents.
 
 ## Integration rules
 
@@ -43,7 +46,7 @@ Keep Gymnasium and Stable-Baselines3 imports inside this package. The domain
 and simulation layers must not depend on either framework. Convert model output
 to the shared `DeviceAction`, `EdgeAction`, and `CloudSchedulingRule` values.
 
-## Suggested workflow
+## Smoke checks
 
 ```bash
 python scripts/check_environment.py
@@ -52,6 +55,8 @@ pytest -q tests/test_mock_env_optional.py
 python scripts/train_device_mock.py --timesteps 2000
 ```
 
-Start with one environment and one adapter, add tests, then integrate the
-frozen policy into `SimPyBackend`. Do not train all three agents before each
-individual policy boundary is tested.
+The mock environment is an API smoke test only. Use
+`scripts/train_integrated_rl.py` and
+`scripts/compare_integrated_policies.py` for experiments on the canonical
+SimPy backend. Checkpoint metadata records the workload source, topology,
+observation version, reward version, seeds, and training configuration.

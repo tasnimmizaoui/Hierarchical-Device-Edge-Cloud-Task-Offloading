@@ -1,4 +1,4 @@
-# Student 1 — simulation backend
+# SimPy simulation backend
 
 The selected backend is SimPy. It implements the
 `mec_offloading.domain.ports.SimulationBackend` protocol and keeps the model
@@ -14,7 +14,7 @@ Required behavior:
 
 ## SimPy simulation backend
 
-`SimPyBackend` is the Student 1 reference backend. It uses SimPy only as the
+`SimPyBackend` is the canonical backend. It uses SimPy only as the
 discrete-event kernel; the MEC model and policy interfaces remain owned by this
 repository.
 
@@ -37,6 +37,6 @@ be injected without importing an RL framework into the simulator.
 Run the focused checks from the repository root:
 
 ```bash
-PYTHONPATH=src pytest -q
-PYTHONPATH=src python3 scripts/run_simulation_smoke.py
+python -m pytest -q tests/test_simpy_backend.py
+python scripts/run_simulation_smoke.py
 ```

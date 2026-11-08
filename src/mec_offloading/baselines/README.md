@@ -1,4 +1,4 @@
-# Student 1 — baseline policies
+# Baseline policies
 
 Baseline policies provide fixed, interpretable references for the later RL
 experiments. They use the same policy protocols as RL adapters, so the
@@ -38,3 +38,8 @@ orders when deadlines and queue contention require it.
 
 Random policies receive independent `random.Random` instances derived from the
 experiment seed. Never use the module-level random generator in a policy.
+
+The policies can be passed to both the default one-device topology and an
+explicit `TopologyConfig`. The standard baseline runner uses the default
+development topology; trace and integrated-RL runners construct their topology
+from a versioned configuration file.

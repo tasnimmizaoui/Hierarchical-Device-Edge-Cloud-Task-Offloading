@@ -1,10 +1,10 @@
-# Coordination hiérarchique V2
+# Feedback coordination
 
-`feedback.py` supporte `none`, `periodic`, `frequent` et `event`.
-Le mode `event` envoie un premier échantillon, puis transmet si le signal
-normalisé de file change d'au moins 0,25 depuis le dernier envoi ou si
-`frequency` observations se sont écoulées. Le délai de transmission
-s'applique à tous les messages, y compris aux rafraîchissements.
+`feedback.py` supports `none`, `periodic`, `frequent`, and `event` modes.
+Event mode sends an initial sample, then sends another sample when the
+normalized queue signal changes by at least 0.25 or after `frequency`
+observations. Transmission delay applies to every message, including
+refreshes.
 
 Pour reproduire l'ablation événementielle sur Alibaba 2017 depuis la racine
 du dépôt, utiliser les trois graines par défaut et la compression commune.
@@ -14,23 +14,15 @@ python scripts/run_feedback_ablation.py --feedback-modes event --arrival-compres
 python scripts/summarize_feedback_ablation.py --feedback-modes none periodic frequent event
 ```
 
-Le coordinateur envoie des signaux de congestion **uniquement entre voisins**.
-Le signal n'est accessible qu'après son délai de propagation + sérialisation.
-Sa livraison est traitée lors de la prochaine consultation par l'agent
-(lazy-delivery à l'instant simulé), sans modifier le moteur SimPy de
-l'étudiante 1. Messages et bytes sont comptés par tâche.
+The coordinator sends congestion signals only between adjacent policy levels.
+Signals become observable after propagation and serialization delay and are
+delivered lazily at the next policy decision. Message counts, bytes, modeled
+delay, age, and sample counts are recorded per task.
 
-**Limite** : la transmission ne monopolise pas une ressource réseau et ne
-bloque pas l'exécution d'une tâche. Cette amélioration donne un ordre causal
-correct pour la disponibilité du signal, mais **pas** une simulation complète
-des coûts de communication sur les liens. À améliorer conjointement plus tard.
-This package is reserved for the feedback exchanged between the three policy
-levels. It is not yet implemented; do not report coordination experiments
-until the message model and measurements exist.
-
-## Planned responsibility
-
-Coordination will define:
+Transmission does not reserve a data-plane network resource or block task
+execution. The model therefore preserves causal signal availability but does
+not represent complete communication-resource contention.
+The coordinator defines:
 
 - which feedback fields move between device, edge, and cloud;
 - who sends each message and when;
@@ -39,8 +31,9 @@ Coordination will define:
 - no-feedback, periodic-feedback, and frequent-feedback configurations;
 - message count, bytes, and latency overhead.
 
-The three configurations must use the same workload, topology, capacities,
-policy checkpoints, and evaluation seeds. Only the feedback cadence may vary.
+Feedback ablations must use the same workload, topology, capacities,
+checkpoints, and evaluation seeds. Only cadence or event threshold should
+vary.
 
 ## Boundary
 

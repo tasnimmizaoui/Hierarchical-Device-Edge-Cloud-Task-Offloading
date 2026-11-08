@@ -1,4 +1,4 @@
-# Shared — evaluation
+# Evaluation and result export
 
 The evaluation layer runs policy/scenario/seed combinations, writes detailed
 CSV results, and aggregates metrics. Training seeds must remain separate from
@@ -27,10 +27,10 @@ Baseline labels mean:
 - `random`: device placement, edge forwarding, and cloud rule are independently
   sampled from seeded random generators.
 
-The current backend intentionally models one device, one edge server, and one
-cloud node. The workload and runner are seed-aware, but a multi-device,
-multi-edge comparison must wait for a topology-capable backend extension;
-current results must not be described as multi-device results.
+The standard baseline runner uses the default one-device development topology.
+The trace and integrated-RL entry points construct `SimulationConfig` from an
+explicit topology file and use the same result and aggregate metric
+definitions.
 
 The current development workload is not intended to distinguish every policy:
 the greedy device policy selects edge for all generated tasks, and the default
@@ -41,7 +41,7 @@ interpreting those policy comparisons.
 Run the current baseline experiment from the repository root:
 
 ```bash
-python scripts/run_baselines.py --seeds 1 2 3
+python scripts/run_baselines.py --seeds 1 2 3 --task-count 10
 ```
 
 The generated `results/` directory is ignored by Git. Keep the command,

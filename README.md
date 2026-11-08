@@ -1,203 +1,157 @@
-# Hierarchical MEC Task Offloading — Project Repository
+# Hierarchical Device–Edge–Cloud Task Offloading
 
-**INSAT · Futurs Réseaux Mobiles · 2026–2027**  
-**Team:** Student 1 — Simulation & Evaluation · Student 2 — RL & Coordination
+A reproducible SimPy simulator and evaluation
+pipeline for hierarchical task offloading across devices, Edge servers, and a
+shared Cloud/HPC scheduler.
 
-## Project goal
+The repository contains:
 
-Implement and evaluate a three-level task-offloading architecture:
+- a discrete-event MEC backend with local, Edge, and Cloud execution paths;
+- configurable multi-device/multi-Edge topologies;
+- synthetic workloads for fast development;
+- an adapter for Alibaba Cluster Trace 2017;
+- deterministic Random, Greedy, EDF, FIFO, and related baselines;
+- integrated Device, Edge, and Cloud DQN policy adapters;
+- CSV exports, validation scripts, and experiment metadata.
 
-- **Device:** execute locally or offload to a nearby edge.
-- **Edge:** execute locally or forward a task to Cloud/HPC.
-- **Cloud/HPC:** schedule tasks received from edge nodes.
+The simulator reports end-to-end latency, queue waiting, deadline status,
+device energy, communication delay/bytes, execution start time, and source
+device/Edge identifiers.
 
-The mandatory evaluation compares Random, Greedy/Nearest, EDF, Centralized RL and Hierarchical RL using end-to-end latency, device energy, deadline satisfaction and coordination overhead.
+## Current scope and limitations
 
+The canonical simulator is [SimPy](https://simpy.readthedocs.io/). The
+repository implements the MEC model explicitly so Device, Edge, and Cloud
+policy boundaries remain testable and independent.
 
-## 🧠 Intégration RL V2 — Étudiante 2
+The backend supports multiple devices and Edge servers feeding one shared
+Cloud worker. Each device and Edge currently has one modeled CPU resource;
+multi-core devices and multiple concurrent Cloud workers are not modeled.
 
-Cette version fusionne le code Double-DQN de `RL.zip` dans le dépôt principal :
-le **moteur SimPy unique** exécute désormais les tâches pour les agents
-Device/Edge/Cloud, l'agent centralisé et les heuristiques. Un visualiseur web
-lit les résultats CSV communs. La V2 ajoute des récompenses terminales par
-tâche, un feedback causal différé, des checkpoints choisis sur validation, des
-ablation de fréquence et le suivi de l'apprentissage. Voir le
-[guide technique et limites de la V2](docs/ETUDIANTE_2_V2_FR.md) et
-[le guide initial de fusion](docs/INTEGRATION_RL.md). Le
-[rapport expérimental](docs/rl_experiment_report.md) détaille la comparaison DQN et Double DQN ainsi que le calibrage de charge sur la validation.
+Alibaba Cluster Trace is a datacenter workload, not a mobile-MEC trace. Its
+timestamps and compute evidence are adapted into the simulator. Device
+assignment, payload sizes, deadlines, batteries, wireless links, and MEC
+capacities are explicit simulation assumptions. See
+[`docs/trace-data-notes.md`](docs/trace-data-notes.md).
+
+The integrated RL workflow uses the same SimPy backend and policy protocols.
+It supports synthetic and Alibaba 2017 workloads, configurable topology
+variants, held-out splits, feedback modes, and DQN/Double-DQN checkpoints.
+The transition formulation is currently a contextual one-step decision with
+terminal or next-decision credit; it is not a full multi-step Gymnasium
+environment.
+
+## Installation
+
+Python 3.11 is the reference runtime.
 
 ```bash
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+python -m pip install --upgrade pip
 pip install -e ".[dev,rl,web]"
-python scripts/run_feedback_ablation.py --seeds 42 43 44 \
-  --episodes 12 --tasks 100 --max-trace-tasks 5000
-streamlit run web_app.py
 ```
 
-Le mode par défaut utilise des tâches synthétiques et la topologie de
-développement 1/1/1. Pour le jeu Alibaba local et la topologie configurée
-(24 devices, 3 edges, cloud partagé), utiliser le même trace et la même limite
-pour entraînement et test. Le mode de charge contendu calibré est `k=0.136067` :
-
-```bash
-python scripts/train_integrated_rl.py --source alibaba2017 --episodes 18 \
-  --tasks 100 --max-trace-tasks 5000 --topology-augmentation sweep \
-  --arrival-compression 0.136067 --seed 42
-python scripts/compare_integrated_policies.py --source alibaba2017 \
-  --feedback periodic --seeds 10001 10002 10003 --tasks 5000 \
-  --max-trace-tasks 5000 --models artifacts/models/integrated
-```
-
-Le loader joint et transforme les CSV en tâches, puis crée des splits
-chronologiques train/validation/test. Les données préparées ne sont pas
-persistées : elles sont reparsées à chaque commande. Alibaba ne fournit pas
-tous les champs MEC ; les payloads, deadlines et affectations sont des
-hypothèses, documentées dans
-[`docs/ETUDIANTE_2_V2_FR.md`](docs/ETUDIANTE_2_V2_FR.md).
-
-Le protocole actuel entraîne sur neuf des 13 variantes et garde quatre
-topologies (dont `combined_stress`) pour le test final. Le tableau de bord compare les résultats DQN et Double DQN par topologie. La méthode et les limites sont dans
-[`docs/INTEGRATION_RL.md`](docs/INTEGRATION_RL.md).
-
-**Limite de capacité :** le SimPy backend supporte plusieurs devices et edges,
-mais un seul slot CPU par device/edge et un worker Cloud. Il n'est pas encore
-multi-core/multi-worker. Le DQN intégré donne un crédit terminal par tâche ;
-il s'agit d'une formulation contextuelle à un pas, pas d'un environnement
-Gymnasium multi-étapes. Réentraîner les modèles après tout changement de schéma
-d'observation ou de topologie.
-
-## Scope rule
-
-Complete the mandatory three-agent system, baselines and reproducible experiments before attempting federated learning. The bonus extension is not part of the initial critical path.
-
-## Team ownership
-
-| Student | Owns | Main outputs |
-|---|---|---|
-| **Student 1 — Simulation & Evaluation** | Simulator feasibility and implementation, workload adapter, topology, compute/network queues, energy and latency model, Random/Greedy/EDF baselines, experiment runner and metric validation | Working simulator, trace/synthetic workload pipeline, baseline policies, metric tests, reproducible CSV runs |
-| **Student 2 — RL & Coordination** | Device/edge/cloud agents, reward design, training, feedback protocol and centralized RL baseline | Three policy agents, model checkpoints, training configs/logs, centralized RL, coordination variants |
-| **Both** | Freeze interfaces, integration, end-to-end tests, experiment protocol, result analysis, IEEE article, oral presentation and demo | Integrated system and complete submission |
-
-Ownership is primary responsibility, not exclusive knowledge. Both students must be able to explain and reproduce the complete system.
-
-## Technology choices
-
-- **Python 3.11** for a consistent development environment.
-- **SimPy 4.x:** the selected discrete-event kernel. We implement the small
-  MEC model ourselves so device, edge, and cloud decisions remain separate.
-  The decision and source-code evidence are in
-  [`docs/decisions/0001-simulator-selection.md`](docs/decisions/0001-simulator-selection.md).
-- Gymnasium is an optional dependency for environment adapters; the current
-  integrated Double-DQN workflow calls the shared policy interfaces directly
-  and is not a multi-step `gymnasium.Env`.
-- The current Double-DQN implementation uses the project's PyTorch agent, not
-  Stable-Baselines3.
-- **NumPy, Pandas, Matplotlib, PyYAML** for computation, data and analysis.
-- **pytest + Ruff + GitHub Actions** for tests, linting and reproducibility checks.
-
-Do not add a second simulator. Student 2's RL code must use the policy
-interfaces in `src/mec_offloading/domain/ports.py`.
-
-## Team workflow
-
-The repository is already initialized. Each student should:
-
-1. Pull the latest `main` branch.
-2. Create a short-lived branch for one task, for example
-   `student-2/device-policy-adapter`.
-3. Run the tests before editing.
-4. Make a focused change and add or update tests.
-5. Run `pytest -q` and `ruff check .`.
-6. Open a pull request and request review from the other student.
-
-Keep `main` stable. Do not change the shared task fields, units, action
-meanings, or policy method signatures without reviewing
-[`docs/interfaces.md`](docs/interfaces.md) together.
-
-## Local setup
-
-### Windows PowerShell
+On Windows PowerShell, replace the activation command with:
 
 ```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev,rl]"
-python scripts/check_environment.py
-pytest
+py -3.11 -m venv .venv311
+.venv311\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, use `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal, or call `.venv\Scripts\python.exe` directly.
-
-### Linux / macOS / WSL
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -e ".[dev,rl]"
-python scripts/check_environment.py
-pytest
-```
-
-For Student 1's initial simulator spike, the non-RL dependencies are sufficient:
-
-```bash
-pip install -e ".[dev]"
-```
-
-For Student 2's separate mock-environment work, install the RL extra:
-
-```bash
-pip install -e ".[dev,rl]"
-```
-
-Start with CPU training. A GPU is not required for the small DQN smoke test.
-
-## Start here
-
-After installation, run the complete verification sequence:
+Check the environment:
 
 ```bash
 python scripts/check_environment.py
-pytest -q
-python scripts/run_simulation_smoke.py
-python scripts/run_baselines.py --seeds 1 2 3
+```
+
+All commands below are run from the repository root. If the package is not
+installed, prefix commands with `PYTHONPATH=src` or use the virtual
+environment's Python executable.
+
+## Verify the repository
+
+Run the complete test suite:
+
+```bash
+python -m pytest -q
+```
+
+Run Ruff:
+
+```bash
 ruff check .
 ```
 
-Read the documentation in this order:
-
-1. [`docs/architecture.md`](docs/architecture.md) — task lifecycle and
-   decision boundaries.
-2. [`docs/interfaces.md`](docs/interfaces.md) — shared data, units, actions,
-   observations, and Python protocols.
-3. [`docs/experiment_protocol.md`](docs/experiment_protocol.md) — baselines,
-   seeds, metrics, and current limitations.
-4. [`docs/task-board.md`](docs/task-board.md) — remaining work by owner.
-
-## Trace workload status
-
-The raw dataset files are local inputs and are not committed as a processed,
-canonical MEC dataset. The Alibaba 2017 loader joins `batch_task.csv` and
-`batch_instance.csv`, applies the documented mapping/rejections, and returns
-the shared `Task` objects:
+Run the small route smoke test:
 
 ```bash
-python scripts/prepare_trace_sample.py data/raw/batch_task.csv \
-  --instances data/raw/batch_instance.csv
-python scripts/run_trace_workload.py data/raw/batch_task.csv \
-  --instances data/raw/batch_instance.csv --max-tasks 20
+python scripts/run_simulation_smoke.py
 ```
 
-See [`docs/trace-data-notes.md`](docs/trace-data-notes.md) for the verified
-schema mapping, synthetic MEC assumptions, current audit counts, and
-chronological train/validation/test splitting. The RL training/compare commands
-also use this loader with `--source alibaba2017`; inputs are parsed again on
-each run, and no reusable processed cache is currently written.
+The smoke test is a sanity check, not a scientific comparison.
 
-## Run a trace workload on the multi-device topology
+## Synthetic workloads and baselines
 
-With the local Alibaba 2017 files, run:
+Run the reproducible baseline comparison on identical seeded workloads:
+
+```bash
+python scripts/run_baselines.py \
+  --seeds 1 2 3 \
+  --task-count 10 \
+  --output-dir results/dev-smoke
+```
+
+The runner writes:
+
+```text
+results/dev-smoke/task_results.csv
+results/dev-smoke/aggregate_metrics.csv
+results/dev-smoke/aggregate_statistics.csv
+```
+
+The baseline labels are defined in
+[`src/mec_offloading/evaluation/README.md`](src/mec_offloading/evaluation/README.md)
+and [`docs/experiment_protocol.md`](docs/experiment_protocol.md). Every policy
+receives the same workload for a given seed; random policies receive
+independent, deterministic random streams.
+
+Run the controlled policy-validation scenarios:
+
+```bash
+python scripts/run_scenario_validation.py configs/greedy-switch.yaml
+python scripts/run_scenario_validation.py configs/cloud-contention.yaml
+```
+
+Demonstrate the three-device/two-Edge/shared-Cloud topology:
+
+```bash
+python scripts/run_multi_topology_demo.py
+```
+
+This prints actual SimPy results, including source IDs, routes, latency,
+energy, deadlines, and Cloud scheduling order.
+
+## Alibaba Cluster Trace 2017
+
+Raw trace files are not committed. Obtain the official Alibaba 2017 archive
+under its terms and place the required files at:
+
+```text
+data/raw/batch_task.csv
+data/raw/batch_instance.csv
+```
+
+Validate the complete local input:
+
+```bash
+python scripts/prepare_trace_sample.py \
+  data/raw/batch_task.csv \
+  --instances data/raw/batch_instance.csv \
+  --format 2017-task
+```
+
+Run a small trace workload on the versioned topology:
 
 ```bash
 python scripts/run_trace_workload.py \
@@ -205,108 +159,123 @@ python scripts/run_trace_workload.py \
   --instances data/raw/batch_instance.csv \
   --source alibaba2017 \
   --max-tasks 20 \
+  --topology-config configs/alibaba-multi-topology.yaml \
+  --output-dir results/trace-multi-topology
+```
+
+Accepted tasks are assigned deterministically in selection order:
+
+```text
+task 0 -> device-1 -> edge-1
+task 1 -> device-2 -> edge-1
+task 2 -> device-3 -> edge-2
+```
+
+The runner writes `task_results.csv` and `aggregate_metrics.csv` under the
+selected output directory. It reports selected records, rejection reasons,
+source IDs, routes, latency, energy, and deadline outcomes.
+
+The same runner can exercise the preserved synthetic generator on the same
+topology:
+
+```bash
+python scripts/run_trace_workload.py \
+  --source synthetic \
+  --max-tasks 6 \
   --topology-config configs/alibaba-multi-topology.yaml
 ```
 
-The loader assigns accepted tasks round-robin to `device-1`, `device-2`, and
-`device-3`. The topology then maps devices 1 and 2 to `edge-1` and device 3
-to `edge-2`; these IDs select actual SimPy resources. The command writes
-`task_results.csv` and `aggregate_metrics.csv` under
-`results/trace-multi-topology/`. Use `--source synthetic` without an input
-file to run the same topology with the preserved synthetic generator.
+The trace adapter and provenance rules are documented in
+[`docs/trace-data-notes.md`](docs/trace-data-notes.md). Raw data and generated
+results are ignored by Git.
 
-Student 1 owns the simulator and physical workload/resource model. Student 2's
-integrated RL adapters satisfy the protocols in
-`src/mec_offloading/domain/ports.py` and train/evaluate through that same
-backend. The simulator/domain layers must not import Gymnasium or
-Stable-Baselines3.
+## Integrated RL experiments
 
-The exact acceptance criteria and task owners are in `docs/task-board.md` and `docs/first-week-plan.md`.
+Train on the default synthetic scenarios:
 
-## Repository structure
+```bash
+python scripts/train_integrated_rl.py \
+  --source synthetic \
+  --episodes 100 \
+  --tasks 100 \
+  --seed 42 \
+  --output artifacts/models/integrated
+```
+
+Train on Alibaba 2017 with the configured multi-device topology:
+
+```bash
+python scripts/train_integrated_rl.py \
+  --source alibaba2017 \
+  --episodes 100 \
+  --tasks 100 \
+  --max-trace-tasks 5000 \
+  --topology-config configs/alibaba-multi-topology.yaml \
+  --topology-augmentation sweep \
+  --deadline-policy best-tier-calibrated \
+  --feedback periodic \
+  --seed 42 \
+  --output artifacts/models/integrated
+```
+
+Training writes model checkpoints, `metadata.json`, and
+`training_log.csv` under the selected output directory. Training and validation
+seeds are kept disjoint by the script.
+
+Evaluate trained checkpoints against baselines:
+
+```bash
+python scripts/compare_integrated_policies.py \
+  --source alibaba2017 \
+  --trace-path data/raw/batch_task.csv \
+  --trace-instances data/raw/batch_instance.csv \
+  --topology-config configs/alibaba-multi-topology.yaml \
+  --models artifacts/models/integrated \
+  --seeds 10001 10002 10003 \
+  --tasks 5000 \
+  --max-trace-tasks 5000 \
+  --deadline-policy best-tier-calibrated \
+  --feedback periodic \
+  --output results/integrated-comparison
+```
+
+Evaluation writes `task_results.csv`, `aggregate_metrics.csv`,
+`aggregate_statistics.csv`, and `metadata.json`. The comparator verifies model
+schema metadata and rejects overlapping training, validation, and evaluation
+seeds.
+
+For the full multi-seed feedback study, use
+[`scripts/run_feedback_ablation.py`](scripts/run_feedback_ablation.py). It
+launches the training and comparison commands with matching trace, topology,
+algorithm, feedback, and seed settings. This is a long-running campaign; use
+smaller episode/task counts for a smoke run first.
+
+## Repository map
 
 ```text
-hierarchical-mec-offloading/
-├── .github/                 # CI, issue and pull-request templates
-├── configs/                 # Versioned experiment parameters
-├── data/                    # README only; raw trace files remain untracked
-├── docs/                    # Architecture, interfaces, decisions, rubric, protocol
-├── scripts/                 # Reproducible commands and smoke tests
-├── src/mec_offloading/
-│   ├── domain/              # Shared tasks, states, actions and formulas
-│   ├── simulation/          # Student 1: selected simulator adapter/backend
-│   ├── baselines/           # Student 1: Random, Greedy, EDF
-│   ├── rl/                  # Student 2: Gymnasium envs, agents and training
-│   ├── coordination/        # Joint: feedback and message accounting
-│   └── evaluation/          # Joint: experiment runner and aggregations
-├── tests/
-├── artifacts/               # Local model/figure outputs; large files ignored
-└── pyproject.toml
+src/mec_offloading/domain/       Shared tasks, states, actions, metrics, ports
+src/mec_offloading/simulation/   SimPy backend and topology configuration
+src/mec_offloading/workloads.py  Synthetic workload generator
+src/mec_offloading/trace_workloads.py
+                                  Alibaba adapters and deterministic assignment
+src/mec_offloading/baselines/    Interpretable policy implementations
+src/mec_offloading/rl/           DQN agents, observations, credit, scenarios
+src/mec_offloading/evaluation/   CSV export and aggregate metrics
+configs/                          Versioned scenario/topology parameters
+scripts/                          Reproducible validation and experiment entry points
+tests/                            Unit and integration tests
+docs/                             Architecture, interfaces, protocol, provenance
+report/                           IEEE article sources and reproducible report assets
 ```
 
-Generated experiment outputs are written under `results/`, which is ignored by
-Git. Do not treat development smoke-test results as final scientific findings.
+Start with:
 
-## Run the Student 1 simulation smoke test
+1. [`docs/architecture.md`](docs/architecture.md)
+2. [`docs/interfaces.md`](docs/interfaces.md)
+3. [`docs/experiment_protocol.md`](docs/experiment_protocol.md)
+4. [`docs/trace-data-notes.md`](docs/trace-data-notes.md)
+5. [`docs/rl_experiment_report.md`](docs/rl_experiment_report.md)
 
-Install the declared dependencies with `pip install -e ".[dev]"`, then run:
-
-```bash
-python scripts/run_simulation_smoke.py
-```
-
-The script uses a seeded synthetic workload and prints measured local,
-device-to-edge and device-to-edge-to-cloud results. It is a smoke test, not an
-experimental claim; compare policies only with the reproducible experiment
-runner and matching workloads.
-
-## Demonstrate the multi-device, multi-edge topology
-
-Run the deterministic manual demonstration:
-
-```bash
-python scripts/run_multi_topology_demo.py
-```
-
-It uses three devices, two independently queued Edge servers, and one shared
-Cloud scheduler. Devices 1 and 2 share Edge 1, while Device 3 uses Edge 2.
-The output is generated from actual SimPy results and includes task source
-identifiers, routes, completion times, latency, device energy, deadlines, and
-the Cloud execution order across both Edge origins. This is an architecture
-demonstration, not a performance benchmark: the workload and policy choices
-are deliberately small and deterministic.
-
-## Run reproducible baseline experiments
-
-Run one workload for each seed and compare every baseline on the matching
-workload:
-
-```bash
-python scripts/run_baselines.py --seeds 1 2 3
-```
-
-Inspect:
-
-```bash
-column -s, -t < results/dev-smoke/aggregate_metrics.csv
-column -s, -t < results/dev-smoke/aggregate_statistics.csv
-```
-
-The protocol, baseline definitions, scenario assumptions, metric denominators
-and current topology limitation are documented in
-[`docs/experiment_protocol.md`](docs/experiment_protocol.md).
-
-## Quality gates
-
-Before merging a pull request:
-
-```bash
-ruff check .
-pytest
-```
-
-A change is not complete merely because the code runs on its author's machine. Include tests or a reproducible manual check, document assumptions, and update the relevant interface/experiment document.
-
-## Final report
-
-Follow the professor's required seven-section article structure. See `docs/report_outline.md` and `docs/evaluation_plan.md`. Every result figure must be discussed in the text, not just inserted.
+Generated results, model binaries, figures, and raw datasets are intentionally
+excluded from normal Git commits. Record the command, configuration, seed set,
+package environment, and source commit for every result used in the report.
