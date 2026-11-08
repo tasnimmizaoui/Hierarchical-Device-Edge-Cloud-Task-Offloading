@@ -1,27 +1,25 @@
 \section{Conclusion and Perspectives}
-This paper implements and evaluates a three-tier SimPy framework for
-device--edge--cloud offloading, integrating centralized DQN, hierarchical DQN,
-and hierarchical Double DQN policies with shared metrics and causal
-adjacent-tier feedback. The matched study shows why multi-tier policy design
-cannot be reduced to a single ranking: centralized DQN has the highest mean
-deadline success, Greedy/EDF the lowest P95 latency, and the two greedy
-policies the lowest device energy. Both hierarchical policies improve on
-Random across the headline metrics, while Double DQN improves P95 and energy
-relative to hierarchical DQN with a small success decrease. Event-triggered
-feedback demonstrates a communication-efficiency trade-off, and the cloud
-ablation identifies fixed SPT as strongest on the reported aggregate metrics.
-Together, these results make the effects of information scope, feedback, and
-queue policy measurable in one controlled framework.
+The three-tier framework makes placement, cloud scheduling and coordination
+measurable under paired task replays. On the reference topology,
+centralized DQN reaches 77.41\% deadline success, and the additional
+centralized Double DQN control reaches 77.40\%. Greedy/EDF achieves
+the lowest mean P95, at 12.95 s. Among hierarchical controllers,
+Double DQN reduces the reference P95 from 16.91 to 15.08 s relative
+to DQN, with a 0.30 percentage point decrease in deadline success.
+The latency ranking reverses under combined stress.
 
-The evidence is bounded by the current experimental model. Alibaba Cluster
-Trace 2017 is a production datacenter trace adapted with assumed MEC payloads,
-deadlines, device assignments, batteries, links, and capacities; multi-task
-jobs and DAG dependencies are not reconstructed. The reference topology uses
-one shared cloud worker. Feedback is modeled with bytes, delay, and age but
-does not contend with data-plane traffic, and centralized state-collection
-traffic is not counted. The learning formulation is not a complete sequential
-multi-agent Gymnasium environment, and reported standard deviations are
-descriptive rather than significance claims. Releasing trace fingerprints and
-checkpoints, adding control-plane contention and multi-worker clouds, and
-moving to a stepable sequential multi-agent environment are natural next
-steps for extending this framework.
+The frozen-policy ablation identifies SPT as the strongest cloud rule
+on the tested workloads. On the reference, replacing the learned
+Double DQN cloud scheduler by SPT reduces mean P95 from 15.08 to
+12.36 s with the same upstream weights. The event-triggered feedback
+experiment also identifies a practical control mechanism. At
+threshold 0.50, Double DQN transmits about 70\% fewer feedback bytes
+than with frequent updates, with a 2.72 s increase in mean P95.
+
+These results characterize one chronological test window and a
+single-worker cloud. An independent trace period, multi-worker
+execution and a shared data/control network would extend the
+evaluation. Federated training is a further direction. Devices could
+aggregate local updates at each edge before the edges synchronize at
+the cloud, with synchronization traffic measured separately from
+inference feedback.

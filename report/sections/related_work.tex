@@ -13,9 +13,9 @@ provides configurable edge-network and compute models
 IoT/fog workflows \cite{gupta2017ifogsim}; and PureEdgeSim targets cloud,
 edge, and mist scenarios with broad extensibility
 \cite{pureedgesim}. The present implementation uses a compact SimPy model so
-that policy injection and the three decision boundaries remain explicit. It
-therefore offers a controlled experimental instrument, not a replacement for
-the richer mobility, application, and network models of those frameworks.
+that policy injection and the three decision boundaries remain explicit. This choice supports paired policy replays in the same event model.
+The specialized frameworks offer richer mobility, application and network
+models for studies where these factors are central.
 
 Deep Q-learning established value-based control from replayed transitions
 \cite{mnih2015human}, while Double DQN separates action selection and target
@@ -30,9 +30,8 @@ and centralized-training/decentralized-execution methods expose the
 information asymmetry that motivates local policy boundaries
 \cite{lowe2017multiagent}. These approaches often assume sequential
 environments, richer multi-agent interaction, or explicit model aggregation.
-The present campaign is more modest: it compares DQN and Double DQN adapters
-under matched simulator conditions and labels feedback and topology effects
-without claiming a universal hierarchy ranking.
+Our study compares value-based controllers under matched workloads and
+separates feedback traffic and cloud scheduling through targeted ablations.
 
 Alibaba Cluster Trace 2017 supplies production datacenter arrival and compute
 records \cite{alibaba2017}. It is not a mobile-MEC measurement. The adapter
